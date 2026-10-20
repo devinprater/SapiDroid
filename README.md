@@ -46,10 +46,20 @@ file winetricks fetches for its `speechsdk` verb). Unpack it, then unpack
 `.BEP`, `.INI`, `.SPEECHUX.NUS`, `.TBT.NUS`, plus the shared `MSTTSLocEnUS.dat`,
 from `C:\Windows\Speech_OneCore\Engines\TTS\en-US` on Windows 8, 10 and 11.
 
+### Getting the SAPI 4 files in the app
+
+Choose **Get SAPI 4 voices from GitHub**. The 1999 installer's cabinet header is
+damaged (it reports 3723 folders and 65317 files), so the app does not unpack
+it: it fetches the seven files themselves from the unpacked copy published at
+[LouisGameDev/Microsoft-Sam-Mary-Mike-TruVoice-WSAPI4](https://github.com/LouisGameDev/Microsoft-Sam-Mary-Mike-TruVoice-WSAPI4)
+(about 6.5 MB), checks each against its SHA-256, and saves them in
+`files/sapi4`. The notice names GitHub, the size and Microsoft's ownership
+before anything is downloaded.
+
 ### Getting the SAPI 5 files in the app
 
-The SAPI 5 files are the only ones the app can fetch itself, because
-Microsoft's installer is held by the Internet Archive. In the app, choose
+The SAPI 5 files come from Microsoft's installer held by the Internet Archive. In
+the app, choose
 **Get SAPI 5 voices from archive.org**. It says where the file comes from and
 that the voices are Microsoft's, then downloads it (about 71 MB), unpacks the
 eight files into the app's private storage, and deletes the download. A

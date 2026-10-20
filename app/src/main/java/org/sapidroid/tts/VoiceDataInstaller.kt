@@ -27,6 +27,35 @@ object VoiceDataInstaller {
     const val SAPI5_BYTES = 71_275_856L
 
     /**
+     * The SAPI 4 voices, from the unpacked copy published on GitHub next to the
+     * original installer. That installer's cabinet header is damaged, so the
+     * files are fetched one at a time instead, each checked against the SHA-256
+     * of the file Microsoft shipped.
+     */
+    const val SAPI4_BASE =
+        "https://raw.githubusercontent.com/LouisGameDev/" +
+            "Microsoft-Sam-Mary-Mike-TruVoice-WSAPI4/main/msttsl/"
+
+    const val SAPI4_BYTES = 6_529_024L
+
+    private val SAPI4_FILES = linkedMapOf(
+        "msttssyn.dll" to (851_456L to
+            "a8a2ddb9b82b4325e1315f481302cd5ba9edcf3742425ed582370f1b3940f731"),
+        "sam.vce" to (1_623_552L to
+            "7ebd8216f022db406c11064af11109d80c62d162db3ee6aef388e51fd90579b7"),
+        "sam.cfg" to (7_680L to
+            "63d67120fab657fe2fa995e0131734397a73e9e55497567d34cdc188fcc86a89"),
+        "male.vce" to (1_939_456L to
+            "516716a1b9ef27c44acdab6f1610f4cc3a0cc7a368b4e4607a87a147255990f0"),
+        "male.cfg" to (26_624L to
+            "a2de20cbd52e3df9937829c7e5ac16ea70245447abbe444719db396cac7cd911"),
+        "female.vce" to (2_053_632L to
+            "24aacb9a15a7fbcb72b26ea54c03f593e6a8b4f757145582ab0833c00462171f"),
+        "female.cfg" to (26_624L to
+            "5a2b7d9e47e555c4ae5d2b58f20e37c789ecf1136eb50cb06fc8d7ebd43396fc")
+    )
+
+    /**
      * Downloads the SDK, takes Data.Cab out of it, and extracts the eight voice
      * files into files/sapi5. Returns the names written.
      */
@@ -81,6 +110,57 @@ object VoiceDataInstaller {
         } finally {
             cab.delete()
         }
+    }
+
+    /**
+     * Fetches the seven SAPI 4 files one at a time into files/sapi4 and checks
+     * each against its known SHA-256, so a partial or altered file can never
+     * reach the engine. Returns the names written.
+     */
+    fun installSapi4(context: Context, progress: (String) -> Unit): List<String> {
+        val outDir = File(context.filesDir, "sapi4")
+        outDir.mkdirs()
+        val names = mutableListOf<String>()
+        var doneBytes = 0L
+        for ((name, meta) in SAPI4_FILES) {
+            val size = meta.first
+            val sha = meta.second
+            val dest = File(outDir, name)
+            if (dest.exists() && dest.length() == size && sha256(dest) == sha) {
+                progress("Already have $name")
+                doneBytes += size
+                names += name
+                continue
+            }
+            dest.delete()
+            progress("Downloading $name from GitHub…")
+            download(SAPI4_BASE + name, dest, size) { done, _ ->
+                val pct = ((doneBytes + done) * 100 / SAPI4_BYTES).toInt()
+                progress("Downloading from GitHub: $pct%")
+            }
+            if (dest.length() != size || sha256(dest) != sha) {
+                val got = dest.length()
+                dest.delete()
+                throw java.io.IOException("$name did not arrive intact ($got of $size bytes)")
+            }
+            doneBytes += size
+            names += name
+        }
+        Log.i(TAG, "SAPI 4 installed: $names")
+        return names
+    }
+
+    private fun sha256(file: File): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(1 shl 16)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
 
     /** Copies [source] up to its zip end record, so ZipFile accepts it. */

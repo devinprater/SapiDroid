@@ -31,6 +31,13 @@
             android:layout_marginTop="12dp"
             android:text="Get SAPI 5 voices from archive.org" />
 
+        <Button
+            android:id="@+id/getSapi4Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Get SAPI 4 voices from GitHub" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

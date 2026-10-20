@@ -34,6 +34,7 @@ class MainActivity : Activity() {
 
         findViewById<Button>(R.id.speakButton).setOnClickListener { speakTest() }
         findViewById<Button>(R.id.getSapi5Button).setOnClickListener { confirmSapi5Download() }
+        findViewById<Button>(R.id.getSapi4Button).setOnClickListener { confirmSapi4Download() }
 
         tts = TextToSpeech(this, { status ->
             resultText.text = if (status == TextToSpeech.SUCCESS) "Engine ready." else "Engine init failed ($status)."
@@ -84,6 +85,53 @@ class MainActivity : Activity() {
             .setPositiveButton("Download") { _, _ -> downloadSapi5() }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /**
+     * The SAPI 4 voices come from the unpacked copy on GitHub, next to the
+     * original 1999 installer, whose packing is damaged. Ask first and name the
+     * host, the size and who owns the voices.
+     */
+    private fun confirmSapi4Download() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Download the SAPI 4 voices?")
+            .setMessage(
+                listOf(
+                    "SapiDroid will download the SAPI 4 voices from GitHub " +
+                        "(github.com), where the files from Microsoft's old installer " +
+                        "are published unpacked. They are about 6.5 MB.",
+                    "The voices are Sam, Mike and Mary. They belong to Microsoft, are " +
+                        "not part of SapiDroid, and are for your own use.",
+                    "They are saved in this app's private storage, and each file is " +
+                        "checked against Microsoft's copy before it is used."
+                ).joinToString(System.lineSeparator() + System.lineSeparator())
+            )
+            .setPositiveButton("Download") { _, _ -> downloadSapi4() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun downloadSapi4() {
+        val button = findViewById<Button>(R.id.getSapi4Button)
+        button.isEnabled = false
+        Thread {
+            try {
+                val names = VoiceDataInstaller.installSapi4(this) { message ->
+                    runOnUiThread { resultText.text = message }
+                }
+                runOnUiThread {
+                    resultText.text = "SAPI 4 voices installed: ${names.joinToString(", ")}"
+                    button.isEnabled = true
+                    showVoiceData()
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "SAPI 4 download failed", t)
+                runOnUiThread {
+                    resultText.text = "SAPI 4 download failed: ${t.message}"
+                    button.isEnabled = true
+                }
+            }
+        }.apply { name = "sapidroid-sapi4-download" }.start()
     }
 
     private fun downloadSapi5() {
