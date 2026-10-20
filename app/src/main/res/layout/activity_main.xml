@@ -25,6 +25,20 @@
             android:textSize="15sp" />
 
         <Button
+            android:id="@+id/oneCoreVoicesButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Download OneCore voices" />
+
+        <Button
+            android:id="@+id/getAnnaButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Get Anna from Sapple" />
+
+        <Button
             android:id="@+id/getSapi5Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

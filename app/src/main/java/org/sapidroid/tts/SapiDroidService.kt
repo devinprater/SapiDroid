@@ -90,7 +90,7 @@ class SapiDroidService : TextToSpeechService() {
     // Voices and languages
     // ------------------------------------------------------------------
 
-    override fun onGetVoices(): MutableList<Voice> = VoiceCatalog.all.map { info ->
+    override fun onGetVoices(): MutableList<Voice> = VoiceCatalog.installed(this).map { info ->
         Voice(
             info.label,
             info.locale,

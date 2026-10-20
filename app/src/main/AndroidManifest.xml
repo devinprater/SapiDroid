@@ -25,6 +25,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".OneCoreVoicesActivity"
+            android:exported="false"
+            android:label="Download OneCore voices" />
+
         <service
             android:name=".SapiDroidService"
             android:exported="true"

@@ -34,13 +34,35 @@ class MainActivity : Activity() {
 
         findViewById<Button>(R.id.speakButton).setOnClickListener { speakTest() }
         findViewById<Button>(R.id.getSapi5Button).setOnClickListener { confirmSapi5Download() }
+        findViewById<Button>(R.id.getAnnaButton).setOnClickListener { confirmAnnaDownload() }
+        findViewById<Button>(R.id.oneCoreVoicesButton).setOnClickListener {
+            startActivity(android.content.Intent(this, OneCoreVoicesActivity::class.java))
+        }
         findViewById<Button>(R.id.getSapi4Button).setOnClickListener { confirmSapi4Download() }
 
         // Headless test hook, independent of the engine: --es getdata anna|sapi4|sapi5
         if (BuildConfig.DEBUG) {
             when (intent.getStringExtra("getdata")) {
+                "anna" -> downloadAnna()
                 "sapi4" -> downloadSapi4()
                 "sapi5" -> downloadSapi5()
+                "onecore" -> {
+                    val requested = intent.getStringExtra("voice")
+                    val pack = requested?.let { OneCorePacks.byVoice(it) }
+                    if (pack != null) {
+                        Thread {
+                            try {
+                                SappleVoices.installVoice(this, pack.voice, pack.prefix) { m ->
+                                    runOnUiThread { resultText.text = m }
+                                }
+                                runOnUiThread { resultText.text = "${pack.voice} installed." }
+                            } catch (t: Throwable) {
+                                android.util.Log.e(TAG, "pack failed", t)
+                                runOnUiThread { resultText.text = "failed: ${t.message}" }
+                            }
+                        }.apply { name = "sapidroid-pack" }.start()
+                    }
+                }
             }
         }
 
@@ -142,6 +164,54 @@ class MainActivity : Activity() {
         }.apply { name = "sapidroid-sapi4-download" }.start()
     }
 
+    /**
+     * Anna comes out of Sapple's bundle: Microsoft's own files, carried there
+     * for personal use. Name the host, the size and the owner before fetching.
+     */
+    private fun confirmAnnaDownload() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Download Microsoft Anna?")
+            .setMessage(
+                listOf(
+                    "SapiDroid will download Anna from Sapple's app bundle at " +
+                        "${SappleVoices.HOST}. It is about 200 MB and holds Anna and " +
+                        "the English OneCore voices.",
+                    "Anna is the voice of Windows Vista and 7. She belongs to Microsoft, " +
+                        "is not part of SapiDroid, and is for your own use.",
+                    "Her files are unpacked into this app's private storage. The " +
+                        "downloaded bundle stays on the phone only while this app is " +
+                        "open, so the OneCore voices can come from it too, and is then " +
+                        "deleted."
+                ).joinToString(System.lineSeparator() + System.lineSeparator())
+            )
+            .setPositiveButton("Download") { _, _ -> downloadAnna() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun downloadAnna() {
+        val button = findViewById<Button>(R.id.getAnnaButton)
+        button.isEnabled = false
+        Thread {
+            try {
+                SappleVoices.installAnna(this) { message ->
+                    runOnUiThread { resultText.text = message }
+                }
+                runOnUiThread {
+                    resultText.text = "Anna installed."
+                    button.isEnabled = true
+                    showVoiceData()
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "Anna download failed", t)
+                runOnUiThread {
+                    resultText.text = "Anna download failed: ${t.message}"
+                    button.isEnabled = true
+                }
+            }
+        }.apply { name = "sapidroid-anna-download" }.start()
+    }
+
     private fun downloadSapi5() {
         android.util.Log.i(TAG, "downloadSapi5 start")
         val button = findViewById<Button>(R.id.getSapi5Button)
@@ -237,6 +307,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        SappleVoices.dropCache(this)
         tts?.shutdown()
         super.onDestroy()
     }

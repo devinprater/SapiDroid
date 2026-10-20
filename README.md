@@ -56,6 +56,19 @@ Mark is the Windows 10/11 voice; add his five files and he appears in the voice
 list. Any OneCore voice from another language pack works the same way, since the
 engine reads the voice files rather than knowing the voices.
 
+### OneCore voices in the app
+
+The app can fetch the English OneCore voices that are stored as plain files in
+[Sapple's](https://quintonwilliams.me/sapple/) iPhone build, which carries
+Microsoft's voice data for personal use. Choose **Download OneCore voices**:
+the screen lists each voice with its language, and the first pick downloads
+Sapple's 200 MB bundle. It stays in the cache while the app is open, so picking
+more voices costs nothing, and it is deleted when the app closes.
+
+George, Susan and Hazel (British English) work on this engine. The bundle's
+newer voices (Sarah and Eva, and the Australian and Indian ones) use a model
+format the engine cannot load, and are not offered.
+
 ### Anna
 
 `files/anna`: `M1033DSK.{CSD,IDX,UNT,CRT,APL,UDT,TTS,LTS,WIH}` from Microsoft's
@@ -63,8 +76,10 @@ Vista/7 voice, plus two tables the engine needs: `M1033DSK.KEY` (the 129-byte
 audio key from `MSTTSDecWrp.dll`) and `M1033DSK.HAN` (the pitch table from
 `MSTTSEngine.dll`).
 
-The project's own tool makes that folder on a PC, reading the Windows 7 voices
-installer without running it:
+In the app, choose **Get Anna from Sapple**: her eleven files are inside the
+same bundle as the OneCore voices, so no unpacking of Microsoft's installer is
+needed. By hand, the rebuild's own tool makes the folder from the Windows 7
+voices installer without running it:
 
 ```
 git clone https://github.com/KamiKitsune420/ms-ana-decomp
