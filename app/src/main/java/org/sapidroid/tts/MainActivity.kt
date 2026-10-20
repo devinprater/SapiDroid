@@ -36,6 +36,14 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.getSapi5Button).setOnClickListener { confirmSapi5Download() }
         findViewById<Button>(R.id.getSapi4Button).setOnClickListener { confirmSapi4Download() }
 
+        // Headless test hook, independent of the engine: --es getdata anna|sapi4|sapi5
+        if (BuildConfig.DEBUG) {
+            when (intent.getStringExtra("getdata")) {
+                "sapi4" -> downloadSapi4()
+                "sapi5" -> downloadSapi5()
+            }
+        }
+
         tts = TextToSpeech(this, { status ->
             resultText.text = if (status == TextToSpeech.SUCCESS) "Engine ready." else "Engine init failed ($status)."
             if (status == TextToSpeech.SUCCESS) {
@@ -170,6 +178,8 @@ class MainActivity : Activity() {
             append(if (has(oneCore, "M1033Zira.APM")) "Zira" else "Zira missing")
             append(if (has(oneCore, "M1033Mark.APM")) " Mark" else " Mark missing")
             append(if (has(oneCore, "MSTTSLocEnUS.dat")) "" else ", shared data missing")
+            append(SEP + "Anna: ")
+            append(if (has(java.io.File(filesDir, "anna"), "M1033DSK.CSD")) "installed" else "not installed")
             append(SEP + "SAPI 4: ")
             append(
                 if (has(s4, "msttssyn.dll") && has(s4, "sam.vce")) "installed"

@@ -39,10 +39,12 @@ class SapiDroidWorkerService : Service() {
     private var pending: ByteArray? = null
 
     private val ziraHandles = HashMap<String, Long>()
+    private val annaHandles = HashMap<String, Long>()
     private val s4Handles = HashMap<String, Long>()
     private val s5Handles = HashMap<String, Long>()
 
     @Volatile private var ziraDir: File? = null
+    @Volatile private var annaDir: File? = null
     @Volatile private var s4Dir: File? = null
     @Volatile private var s5Dir: File? = null
     @Volatile private var openError: String = ""
@@ -62,6 +64,19 @@ class SapiDroidWorkerService : Service() {
             return 0
         }
         ziraHandles[voice] = handle
+        return handle
+    }
+
+    private fun openAnna(voice: String): Long {
+        annaHandles[voice]?.let { if (it != 0L) return it }
+        val dir = annaDir ?: return 0
+        val handle = NativeAnna.open(dir.absolutePath)
+        if (handle == 0L) {
+            openError = "no Anna voice data in ${dir.absolutePath}"
+            Log.e(TAG, openError)
+            return 0
+        }
+        annaHandles[voice] = handle
         return handle
     }
 
@@ -189,6 +204,7 @@ class SapiDroidWorkerService : Service() {
                 engine = VoiceCatalog.infoFor(currentVoice)?.engine
                 handle = when (engine) {
                     VoiceCatalog.Engine.ONECORE -> ziraHandles[currentVoice] ?: 0L
+                    VoiceCatalog.Engine.ANNA -> annaHandles[currentVoice] ?: 0L
                     VoiceCatalog.Engine.SAPI4 -> s4Handles[currentVoice] ?: 0L
                     VoiceCatalog.Engine.SAPI5 -> s5Handles[currentVoice] ?: 0L
                     null -> 0L
@@ -199,6 +215,7 @@ class SapiDroidWorkerService : Service() {
                 try {
                     when (engine) {
                         VoiceCatalog.Engine.ONECORE -> NativeZira.cancel(handle)
+                        VoiceCatalog.Engine.ANNA -> NativeAnna.cancel(handle)
                         VoiceCatalog.Engine.SAPI4 -> NativeSapi4.cancel(handle)
                         VoiceCatalog.Engine.SAPI5 -> NativeSapi5.cancel(handle)
                         null -> {}
@@ -219,6 +236,8 @@ class SapiDroidWorkerService : Service() {
             return when (info.engine) {
                 VoiceCatalog.Engine.ONECORE ->
                     if (openZira(info.name) != 0L) VoiceCatalog.SAMPLE_RATE else 0
+                VoiceCatalog.Engine.ANNA ->
+                    if (openAnna(info.name) != 0L) VoiceCatalog.SAMPLE_RATE else 0
                 VoiceCatalog.Engine.SAPI4 -> {
                     val h = openSapi4(info.name)
                     if (h != 0L) NativeSapi4.sampleRate(h) else 0
@@ -234,6 +253,7 @@ class SapiDroidWorkerService : Service() {
             val info = VoiceCatalog.infoFor(voice) ?: return "unknown voice $voice"
             val ok = when (info.engine) {
                 VoiceCatalog.Engine.ONECORE -> openZira(info.name) != 0L
+                VoiceCatalog.Engine.ANNA -> openAnna(info.name) != 0L
                 VoiceCatalog.Engine.SAPI4 -> openSapi4(info.name) != 0L
                 VoiceCatalog.Engine.SAPI5 -> openSapi5(info.name) != 0L
             }
@@ -244,6 +264,7 @@ class SapiDroidWorkerService : Service() {
     override fun onCreate() {
         super.onCreate()
         ziraDir = File(filesDir, "voice").also { it.mkdirs() }
+        annaDir = File(filesDir, "anna").also { it.mkdirs() }
         s4Dir = File(filesDir, "sapi4").also { it.mkdirs() }
         s5Dir = File(filesDir, "sapi5").also { it.mkdirs() }
         Thread {
@@ -281,6 +302,14 @@ class SapiDroidWorkerService : Service() {
                         NativeZira.setRate(h, sapi5Rate(ratePercent))
                         NativeZira.setPitch(h, sapi5Pitch(pitchPercent))
                         NativeZira.speak(h, text)
+                    }
+                }
+                VoiceCatalog.Engine.ANNA -> {
+                    val h = openAnna(info.name)
+                    if (h == 0L) null else {
+                        NativeAnna.setRate(h, sapi5Rate(ratePercent))
+                        NativeAnna.setPitch(h, sapi5Pitch(pitchPercent))
+                        NativeAnna.speak(h, text)
                     }
                 }
                 VoiceCatalog.Engine.SAPI5 -> {
@@ -365,6 +394,14 @@ class SapiDroidWorkerService : Service() {
                 }
             }
             ziraHandles.clear()
+            for (h in annaHandles.values) {
+                try {
+                    NativeAnna.close(h)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "anna close failed", t)
+                }
+            }
+            annaHandles.clear()
             for (h in s4Handles.values) {
                 try {
                     NativeSapi4.close(h)

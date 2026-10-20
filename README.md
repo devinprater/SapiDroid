@@ -2,7 +2,7 @@
 
 Microsoft's classic speech voices as an Android system TTS engine, offline.
 
-Three engine families, all portable C reconstructions that match Microsoft's own
+Four engine families, all portable C reconstructions that match Microsoft's own
 output:
 
 - **SAPI 4** (1999): Sam, Mike, Mary and their 18 modes, including the Whisper,
@@ -12,7 +12,12 @@ output:
 - **SAPI 5** (Windows XP): Sam, Mike and Mary. Engine:
   [ms-sam-mike-mary-decomp](https://github.com/KamiKitsune420/ms-sam-mike-mary-decomp)
   by KamiKitsune420, MIT.
-- **OneCore** (Windows 8, 10, 11): David and Zira.
+- **Anna** (Windows Vista and 7): Microsoft's Vista voice, from the "Mulan"
+  engine. Engine:
+  [ms-ana-decomp](https://github.com/KamiKitsune420/ms-ana-decomp) by
+  KamiKitsune420, MIT: a bit-exact C99 rebuild, including her WMA Voice 9
+  decoder, rate change and pitch change.
+- **OneCore** (Windows 8, 10, 11): David, Zira and Mark.
   [ms-david-zira-decomp](https://github.com/KamiKitsune420/ms-david-zira-decomp),
   MIT.
 
@@ -50,6 +55,27 @@ shared `MSTTSLocEnUS.dat`, from
 Mark is the Windows 10/11 voice; add his five files and he appears in the voice
 list. Any OneCore voice from another language pack works the same way, since the
 engine reads the voice files rather than knowing the voices.
+
+### Anna
+
+`files/anna`: `M1033DSK.{CSD,IDX,UNT,CRT,APL,UDT,TTS,LTS,WIH}` from Microsoft's
+Vista/7 voice, plus two tables the engine needs: `M1033DSK.KEY` (the 129-byte
+audio key from `MSTTSDecWrp.dll`) and `M1033DSK.HAN` (the pitch table from
+`MSTTSEngine.dll`).
+
+The project's own tool makes that folder on a PC, reading the Windows 7 voices
+installer without running it:
+
+```
+git clone https://github.com/KamiKitsune420/ms-ana-decomp
+python tools/anna_extract.py Win7_TTS_Voices_v1.1.exe anna-data
+adb push anna-data/. /data/local/tmp/anna-data
+adb shell "run-as org.sapidroid.tts mkdir -p files/anna"
+adb shell "run-as org.sapidroid.tts cp /data/local/tmp/anna-data/* files/anna/"
+```
+
+Older Anna packages, such as the 2006 XP-era one, do not work: their engine
+files carry neither the audio key nor the same voice tables.
 
 ### Getting the SAPI 4 files in the app
 

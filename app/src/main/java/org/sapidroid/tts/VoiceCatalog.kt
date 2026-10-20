@@ -13,7 +13,7 @@ object VoiceCatalog {
     /** OneCore output rate; SAPI 4 reports its own per mode. */
     const val SAMPLE_RATE = 16000
 
-    enum class Engine { ONECORE, SAPI4, SAPI5 }
+    enum class Engine { ONECORE, ANNA, SAPI4, SAPI5 }
 
     data class Info(
         val engine: Engine,
@@ -26,6 +26,11 @@ object VoiceCatalog {
         Info(Engine.ONECORE, "David", "David (OneCore)"),
         Info(Engine.ONECORE, "Zira", "Zira (OneCore)"),
         Info(Engine.ONECORE, "Mark", "Mark (OneCore)"),
+    )
+
+    /** Microsoft Anna, the Windows Vista and 7 voice: her own engine. */
+    private val anna = listOf(
+        Info(Engine.ANNA, "Anna", "Anna (Vista)"),
     )
 
     private val sapi4 = listOf(
@@ -48,7 +53,7 @@ object VoiceCatalog {
         Info(Engine.SAPI5, "Mary5", "Mary (SAPI 5)"),
     )
 
-    val all: List<Info> = sapi5 + sapi4 + oneCore
+    val all: List<Info> = sapi5 + sapi4 + oneCore + anna
 
     val defaultVoice: String = "David"
 

@@ -42,6 +42,22 @@ set(ENGINE_SOURCES
     ${ENGINE_DIR}/zb_ratechg.c
 )
 
+set(ANNA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/anna)
+set(ANNA_SOURCES
+    ${ANNA_DIR}/anna_tts.c
+    ${ANNA_DIR}/anna_voice.c
+    ${ANNA_DIR}/anna_render.c
+    ${ANNA_DIR}/anna_dec_wmav.c
+    ${ANNA_DIR}/anna_norm.c
+    ${ANNA_DIR}/anna_lex.c
+    ${ANNA_DIR}/anna_lts.c
+    ${ANNA_DIR}/anna_morph.c
+    ${ANNA_DIR}/anna_pos.c
+    ${ANNA_DIR}/anna_prosody.c
+    ${ANNA_DIR}/anna_units.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/sapidroid_anna_jni.c
+)
+
 set(SAPI4_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sapi4)
 file(GLOB SAPI4_SOURCES ${SAPI4_DIR}/src/*.c)
 list(APPEND SAPI4_SOURCES
@@ -64,9 +80,9 @@ set(SAPI5_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/sapidroid_sapi5_jni.c
 )
 
-add_library(sapidroid SHARED sapidroid_jni.c ${ENGINE_SOURCES} ${SAPI4_SOURCES} ${SAPI5_SOURCES})
+add_library(sapidroid SHARED sapidroid_jni.c ${ENGINE_SOURCES} ${ANNA_SOURCES} ${SAPI4_SOURCES} ${SAPI5_SOURCES})
 
-target_include_directories(sapidroid PRIVATE ${ENGINE_DIR} ${SAPI4_DIR}/lib ${SAPI4_DIR}/src ${SAPI4_DIR}/port ${SAPI5_DIR})
+target_include_directories(sapidroid PRIVATE ${ENGINE_DIR} ${ANNA_DIR} ${SAPI4_DIR}/lib ${SAPI4_DIR}/src ${SAPI4_DIR}/port ${SAPI5_DIR})
 
 # The engine is bit-exact only without floating point contraction and fast math.
 target_compile_options(sapidroid PRIVATE
