@@ -42,9 +42,14 @@ file winetricks fetches for its `speechsdk` verb). Unpack it, then unpack
 
 ### OneCore
 
-`files/voice`: `M1033David.APM`, `.BEP`, `.INI`, and for Zira `M1033Zira.APM`,
-`.BEP`, `.INI`, `.SPEECHUX.NUS`, `.TBT.NUS`, plus the shared `MSTTSLocEnUS.dat`,
-from `C:\Windows\Speech_OneCore\Engines\TTS\en-US` on Windows 8, 10 and 11.
+`files/voice`: `M1033David.APM`, `.BEP`, `.INI`, and for Zira and Mark
+`M1033Zira.*` / `M1033Mark.*` including `.SPEECHUX.NUS` and `.TBT.NUS`, plus the
+shared `MSTTSLocEnUS.dat`, from
+`C:\Windows\Speech_OneCore\Engines\TTS\en-US` on Windows 8, 10 and 11.
+
+Mark is the Windows 10/11 voice; add his five files and he appears in the voice
+list. Any OneCore voice from another language pack works the same way, since the
+engine reads the voice files rather than knowing the voices.
 
 ### Getting the SAPI 4 files in the app
 

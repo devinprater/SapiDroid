@@ -25,6 +25,7 @@ object VoiceCatalog {
     private val oneCore = listOf(
         Info(Engine.ONECORE, "David", "David (OneCore)"),
         Info(Engine.ONECORE, "Zira", "Zira (OneCore)"),
+        Info(Engine.ONECORE, "Mark", "Mark (OneCore)"),
     )
 
     private val sapi4 = listOf(

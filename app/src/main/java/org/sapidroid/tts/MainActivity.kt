@@ -168,6 +168,7 @@ class MainActivity : Activity() {
             append("OneCore: ")
             append(if (has(oneCore, "M1033David.APM")) "David " else "David missing ")
             append(if (has(oneCore, "M1033Zira.APM")) "Zira" else "Zira missing")
+            append(if (has(oneCore, "M1033Mark.APM")) " Mark" else " Mark missing")
             append(if (has(oneCore, "MSTTSLocEnUS.dat")) "" else ", shared data missing")
             append(SEP + "SAPI 4: ")
             append(
