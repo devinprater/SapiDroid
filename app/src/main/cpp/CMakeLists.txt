@@ -42,9 +42,18 @@ set(ENGINE_SOURCES
     ${ENGINE_DIR}/zb_ratechg.c
 )
 
-add_library(sapidroid SHARED sapidroid_jni.c ${ENGINE_SOURCES})
+set(SAPI4_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sapi4)
+file(GLOB SAPI4_SOURCES ${SAPI4_DIR}/src/*.c)
+list(APPEND SAPI4_SOURCES
+    ${SAPI4_DIR}/lib/sapi4tts.c
+    ${SAPI4_DIR}/lib/stubs.c
+    ${SAPI4_DIR}/port/dllimage.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/sapidroid_sapi4_jni.c
+)
 
-target_include_directories(sapidroid PRIVATE ${ENGINE_DIR})
+add_library(sapidroid SHARED sapidroid_jni.c ${ENGINE_SOURCES} ${SAPI4_SOURCES})
+
+target_include_directories(sapidroid PRIVATE ${ENGINE_DIR} ${SAPI4_DIR}/lib ${SAPI4_DIR}/src ${SAPI4_DIR}/port)
 
 # The engine is bit-exact only without floating point contraction and fast math.
 target_compile_options(sapidroid PRIVATE

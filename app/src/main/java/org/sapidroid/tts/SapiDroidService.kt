@@ -92,7 +92,7 @@ class SapiDroidService : TextToSpeechService() {
 
     override fun onGetVoices(): MutableList<Voice> = VoiceCatalog.all.map { info ->
         Voice(
-            info.name,
+            info.label,
             info.locale,
             Voice.QUALITY_HIGH,
             Voice.LATENCY_NORMAL,
@@ -122,7 +122,7 @@ class SapiDroidService : TextToSpeechService() {
         onIsLanguageAvailable(lang, country, variant)
 
     override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String =
-        VoiceCatalog.forLocale(lang, country).name
+        VoiceCatalog.forLocale(lang, country).label
 
     // ------------------------------------------------------------------
     // Synthesis
@@ -150,12 +150,14 @@ class SapiDroidService : TextToSpeechService() {
             return
         }
 
-        val voice = VoiceCatalog.infoFor(request.voiceName)?.name
-            ?: VoiceCatalog.forLocale(request.language, request.country).name
-        val rate = sapiRate(request.speechRate)
-        val pitch = sapiPitch(request.pitch)
+        val info = VoiceCatalog.infoFor(request.voiceName)
+            ?: VoiceCatalog.forLocale(request.language, request.country)
+        val voice = info.label
+        val ratePercent = request.speechRate.takeIf { it > 0 } ?: 100
+        val pitchPercent = request.pitch.takeIf { it > 0 } ?: 100
 
-        Log.i(TAG, "synth start voice=$voice chars=${text.length} rate=$rate pitch=$pitch")
+        Log.i(TAG, "synth start voice=$voice engine=${info.engine} chars=${text.length} " +
+            "rate=$ratePercent pitch=$pitchPercent")
 
         var worker = currentWorker
         val pcm: ShortArray? = try {
@@ -163,7 +165,7 @@ class SapiDroidService : TextToSpeechService() {
                 worker = SapiDroidWorkers.acquire(this)
                 currentWorker = worker
             }
-            speak(worker, voice, rate, pitch, text)
+            speak(worker, voice, ratePercent, pitchPercent, text)
         } catch (t: Throwable) {
             Log.e(TAG, "worker synthesis failed", t)
             null
@@ -210,15 +212,15 @@ class SapiDroidService : TextToSpeechService() {
     private fun speak(
         startWorker: IZiraWorker,
         voice: String,
-        rate: Int,
-        pitch: Int,
+        ratePercent: Int,
+        pitchPercent: Int,
         text: String
     ): ShortArray? {
         var worker = startWorker
         var replaced = false
         while (true) {
             try {
-                return speakOnce(worker, voice, rate, pitch, text)
+                return speakOnce(worker, voice, ratePercent, pitchPercent, text)
             } catch (e: WorkerGone) {
                 if (replaced || stopped.get()) return null
                 replaced = true
@@ -234,12 +236,12 @@ class SapiDroidService : TextToSpeechService() {
     private fun speakOnce(
         worker: IZiraWorker,
         voice: String,
-        rate: Int,
-        pitch: Int,
+        ratePercent: Int,
+        pitchPercent: Int,
         text: String
     ): ShortArray? {
         val id = try {
-            worker.say(voice, rate, pitch, text, SAY_WAIT_MS)
+            worker.say(voice, ratePercent, pitchPercent, text, SAY_WAIT_MS)
         } catch (t: Throwable) {
             SapiDroidWorkers.retire(worker)
             throw WorkerGone("say failed", t)
@@ -298,22 +300,5 @@ class SapiDroidService : TextToSpeechService() {
             j += 2
         }
         return out
-    }
-
-    /**
-     * Android's percent -> the engine's SAPI scale, -10..10, where each step
-     * is 3^(1/10). 100% is 0 and anything near it stays there.
-     */
-    private fun sapiRate(percent: Int): Int {
-        if (percent <= 0 || abs(percent - 100) <= 3) return 0
-        val step = (10.0 * ln(percent / 100.0) / ln(3.0)).roundToInt()
-        return step.coerceIn(-10, 10)
-    }
-
-    /** Android's pitch ratio -> -10..10, where one unit is half a semitone. */
-    private fun sapiPitch(percent: Int): Int {
-        if (percent <= 0 || abs(percent - 100) <= 2) return 0
-        val step = (24.0 * log2(percent / 100.0)).roundToInt()
-        return step.coerceIn(-10, 10)
     }
 }

@@ -12,7 +12,7 @@ interface IZiraWorker {
      * previous request is still running it waits up to [waitMs], then
      * answers BUSY.
      */
-    int say(String voice, int rate, int pitch, String text, int waitMs);
+    int say(String voice, int ratePercent, int pitchPercent, String text, int waitMs);
 
     /**
      * The next block of little-endian 16-bit samples, or null when the

@@ -73,7 +73,7 @@ class MainActivity : Activity() {
         intent.getStringExtra(EXTRA_VOICE)?.let { name ->
             VoiceCatalog.infoFor(name)?.let { info ->
                 tts?.voice = android.speech.tts.Voice(
-                    info.name, info.locale,
+                    info.label, info.locale,
                     android.speech.tts.Voice.QUALITY_HIGH,
                     android.speech.tts.Voice.LATENCY_NORMAL,
                     false, emptySet()
