@@ -46,7 +46,16 @@ file winetricks fetches for its `speechsdk` verb). Unpack it, then unpack
 `.BEP`, `.INI`, `.SPEECHUX.NUS`, `.TBT.NUS`, plus the shared `MSTTSLocEnUS.dat`,
 from `C:\Windows\Speech_OneCore\Engines\TTS\en-US` on Windows 8, 10 and 11.
 
-### Putting them on the phone
+### Getting the SAPI 5 files in the app
+
+The SAPI 5 files are the only ones the app can fetch itself, because
+Microsoft's installer is held by the Internet Archive. In the app, choose
+**Get SAPI 5 voices from archive.org**. It says where the file comes from and
+that the voices are Microsoft's, then downloads it (about 71 MB), unpacks the
+eight files into the app's private storage, and deletes the download. A
+partial download is resumed next time rather than started over.
+
+### Putting them on the phone by hand
 
 The app is debuggable, so `adb` can write into its private storage:
 

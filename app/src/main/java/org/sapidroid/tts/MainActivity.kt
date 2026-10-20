@@ -13,6 +13,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val TAG = "SapiDroidUi"
+        private val SEP = System.lineSeparator() + System.lineSeparator()
         private const val EXTRA_AUTOSPEAK = "autospeak"
         private const val EXTRA_VOICE = "voice"
         private const val ENGINE_PACKAGE = "org.sapidroid.tts"
@@ -27,23 +28,22 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         statusText = findViewById(R.id.statusText)
         resultText = findViewById(R.id.resultText)
+        showVoiceData()
+        android.util.Log.i(TAG, "debug=${BuildConfig.DEBUG} download=${intent.getBooleanExtra("download", false)} extras=${intent.extras}")
 
-        val voiceDir = java.io.File(filesDir, "voice")
-        val haveDavid = java.io.File(voiceDir, "M1033David.APM").exists()
-        val haveZira = java.io.File(voiceDir, "M1033Zira.APM").exists()
-        val haveLoc = java.io.File(voiceDir, "MSTTSLocEnUS.dat").exists()
-        statusText.text = buildString {
-            append("Voice data folder: ${voiceDir.absolutePath}\n")
-            append("David: ${if (haveDavid) "present" else "missing"}\n")
-            append("Zira: ${if (haveZira) "present" else "missing"}\n")
-            append("Shared data: ${if (haveLoc) "present" else "missing"}")
-        }
 
         findViewById<Button>(R.id.speakButton).setOnClickListener { speakTest() }
+        findViewById<Button>(R.id.getSapi5Button).setOnClickListener { confirmSapi5Download() }
 
         tts = TextToSpeech(this, { status ->
             resultText.text = if (status == TextToSpeech.SUCCESS) "Engine ready." else "Engine init failed ($status)."
-            if (status == TextToSpeech.SUCCESS) tryAutospeak()
+            if (status == TextToSpeech.SUCCESS) {
+                if (BuildConfig.DEBUG) {
+                    intent.getStringExtra("localexe")?.let { installFromLocalExe(it) }
+                    if (intent.getBooleanExtra("download", false)) downloadSapi5()
+                }
+                tryAutospeak()
+            }
         }, ENGINE_PACKAGE)
 
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -59,6 +59,98 @@ class MainActivity : Activity() {
                 runOnUiThread { resultText.text = "Error speaking. Is the voice data in the folder above?" }
             }
         })
+    }
+
+    /**
+     * The SAPI 5 voices live in Microsoft's Speech SDK 5.1, which is only
+     * available from the Internet Archive's copy of Microsoft's download. Ask
+     * first, say where it comes from, then fetch and unpack it.
+     */
+    private fun confirmSapi5Download() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Download the SAPI 5 voices?")
+            .setMessage(
+                listOf(
+                    "SapiDroid will download Microsoft's Speech SDK 5.1 from the Internet " +
+                        "Archive (web.archive.org), a saved copy of Microsoft's own " +
+                        "download. It is about 71 MB.",
+                    "It contains the SAPI 5 voices Sam, Mike and Mary. Those voices " +
+                        "belong to Microsoft, are not part of SapiDroid, and are for " +
+                        "your own use.",
+                    "The download is unpacked into this app's private storage and " +
+                        "the downloaded file is deleted afterwards."
+                ).joinToString(System.lineSeparator() + System.lineSeparator())
+            )
+            .setPositiveButton("Download") { _, _ -> downloadSapi5() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun downloadSapi5() {
+        android.util.Log.i(TAG, "downloadSapi5 start")
+        val button = findViewById<Button>(R.id.getSapi5Button)
+        button.isEnabled = false
+        Thread {
+            android.util.Log.i(TAG, "download thread running")
+            try {
+                val names = VoiceDataInstaller.installSapi5(this) { message ->
+                    runOnUiThread { resultText.text = message }
+                }
+                runOnUiThread {
+                    resultText.text = "SAPI 5 voices installed: ${names.joinToString(", ")}"
+                    button.isEnabled = true
+                    showVoiceData()
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "SAPI 5 download failed", t)
+                runOnUiThread {
+                    resultText.text = "Download failed: ${t.message}"
+                    button.isEnabled = true
+                }
+            }
+        }.apply { name = "sapidroid-sapi5-download" }.start()
+    }
+
+    private fun showVoiceData() {
+        val oneCore = java.io.File(filesDir, "voice")
+        val s4 = java.io.File(filesDir, "sapi4")
+        val s5 = java.io.File(filesDir, "sapi5")
+        fun has(dir: java.io.File, name: String) = java.io.File(dir, name).exists()
+        statusText.text = buildString {
+            append("OneCore: ")
+            append(if (has(oneCore, "M1033David.APM")) "David " else "David missing ")
+            append(if (has(oneCore, "M1033Zira.APM")) "Zira" else "Zira missing")
+            append(if (has(oneCore, "MSTTSLocEnUS.dat")) "" else ", shared data missing")
+            append(SEP + "SAPI 4: ")
+            append(
+                if (has(s4, "msttssyn.dll") && has(s4, "sam.vce")) "installed"
+                else "not installed"
+            )
+            append(SEP + "SAPI 5: ")
+            val count = listOf(
+                "Sam.spd", "Sam.sdf", "Mike.spd", "Mike.sdf",
+                "Mary.spd", "Mary.sdf", "LTTS1033.LXA", "r1033tts.LXA"
+            ).count { has(s5, it) }
+            append(if (count == 8) "installed" else "$count of 8 files")
+        }
+    }
+
+    /** Debug only: run the unpacking from a file already on the device. */
+    private fun installFromLocalExe(path: String) {
+        Thread {
+            try {
+                val names = VoiceDataInstaller.installSapi5(this, java.io.File(path)) { message ->
+                    runOnUiThread { resultText.text = message }
+                }
+                runOnUiThread {
+                    resultText.text = "Local extraction: ${names.size} files"
+                    showVoiceData()
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "local extraction failed", t)
+                runOnUiThread { resultText.text = "Local extraction failed: ${t.message}" }
+            }
+        }.apply { name = "sapidroid-local-extract" }.start()
     }
 
     private fun speakTest() {

@@ -48,7 +48,7 @@ class SapiDroidService : TextToSpeechService() {
             } catch (t: Throwable) {
                 Log.e(TAG, "engine worker warm-up failed", t)
             }
-        }.name = "sapidroid-worker-warmup"
+        }.apply { name = "sapidroid-worker-warmup" }.start()
     }
 
     override fun onDestroy() {
@@ -83,7 +83,7 @@ class SapiDroidService : TextToSpeechService() {
                 Log.w(TAG, "engine still busy after stop: retiring worker")
                 SapiDroidWorkers.retire(worker)
             }
-        }.name = "sapidroid-retire-check"
+        }.apply { name = "sapidroid-retire-check" }.start()
     }
 
     // ------------------------------------------------------------------

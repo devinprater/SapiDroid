@@ -252,7 +252,7 @@ class SapiDroidWorkerService : Service() {
             } catch (t: Throwable) {
                 Log.e(TAG, "OneCore warm-up failed", t)
             }
-        }.name = "sapidroid-warmup"
+        }.apply { name = "sapidroid-warmup" }.start()
     }
 
     // ------------------------------------------------------------------
