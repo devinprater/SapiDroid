@@ -30,18 +30,24 @@ static const struct { const char *name; int level, dir, skip; } LOC[] = {
 enum {
     P_PhoneIdentity = 0x00, P_PhoneNumber = 0x01, P_SyllableNumber = 0x02, P_WordNumber = 0x03, P_PWNumber = 0x04,
     P_PhraseNumber = 0x05, P_IPNumber = 0x06, P_FwPosInSyllable = 0x07, P_BwPosInSyllable = 0x08, P_FwPosInWord = 0x09,
-    P_BwPosInWord = 0x0a, P_FwPosInPhrase = 0x0d, P_BwPosInPhrase = 0x0e, P_FwPosInSentence = 0x11,
-    P_BwPosInSentence = 0x12, P_Stress = 0x15, P_Accent = 0x16, P_POS = 0x17, P_POSTaggerPOS = 0x18,
-    P_ToBIFinalBoundaryTone = 0x19, P_BreakIndex = 0x2a, P_SentenceType = 0x2e, P_FwPosInYesNoQuestion = 0x2f,
-    P_BwPosInYesNoQuestion = 0x30, P_Emphasis = 0x4c, P_ToBIAccent = 0x4f, P_SentenceEmotion = 0x54, P_Tone = 0x29
+    P_BwPosInWord = 0x0a, P_FwPosInPhrase = 0x0d, P_BwPosInPhrase = 0x0e, P_FwPosInIP = 0x0f, P_BwPosInIP = 0x10,
+    P_FwPosInSentence = 0x11, P_BwPosInSentence = 0x12, P_Stress = 0x15, P_Accent = 0x16, P_POS = 0x17,
+    P_POSTaggerPOS = 0x18, P_ToBIFinalBoundaryTone = 0x19, P_BreakIndex = 0x2a, P_VowelLength = 0x2b,
+    P_SentenceType = 0x2e, P_FwPosInYesNoQuestion = 0x2f, P_BwPosInYesNoQuestion = 0x30, P_Emphasis = 0x4c,
+    P_ToBIAccent = 0x4f, P_SentenceEmotion = 0x54, P_Tone = 0x29
 };
 static const struct { const char *name; int id; } PROP[] = {
     {"PhoneIdentity", P_PhoneIdentity}, {"PhoneNumber", P_PhoneNumber}, {"SyllableNumber", P_SyllableNumber},
     {"WordNumber", P_WordNumber}, {"ProsodicWordNumber", P_PWNumber}, {"PhraseNumber", P_PhraseNumber},
     {"IntonationPhraseNumber", P_IPNumber}, {"FwPosInSyllable", P_FwPosInSyllable},
     {"BwPosInSyllable", P_BwPosInSyllable}, {"FwPosInWord", P_FwPosInWord}, {"BwPosInWord", P_BwPosInWord},
-    {"FwPosInPhrase", P_FwPosInPhrase}, {"BwPosInPhrase", P_BwPosInPhrase}, {"FwPosInSentence", P_FwPosInSentence},
-    {"BwPosInSentence", P_BwPosInSentence}, {"Stress", P_Stress}, {"Accent", P_Accent}, {"POS", P_POS},
+    {"FwPosInPhrase", P_FwPosInPhrase}, {"BwPosInPhrase", P_BwPosInPhrase},
+    /* Speech Platform 11 voices (Zira Pro) ask for the intonation-phrase and sentence positions at word/phrase
+     * level, plus the word's vowel class. The ids follow the layout of the engine's table (Phrase, then
+     * IntonationPhrase, then Sentence); VowelLength's id is this port's own, the APM matches by name. */
+    {"FwPosInIntonationPhrase", P_FwPosInIP}, {"BwPosInIntonationPhrase", P_BwPosInIP},
+    {"FwPosInSentence", P_FwPosInSentence}, {"BwPosInSentence", P_BwPosInSentence}, {"VowelLength", P_VowelLength},
+    {"Stress", P_Stress}, {"Accent", P_Accent}, {"POS", P_POS},
     {"POSTaggerPOS", P_POSTaggerPOS}, {"ToBIFinalBoundaryTone", P_ToBIFinalBoundaryTone},
     {"BreakIndex", P_BreakIndex}, {"SentenceType", P_SentenceType}, {"FwPosInYesNoQuestion", P_FwPosInYesNoQuestion},
     {"BwPosInYesNoQuestion", P_BwPosInYesNoQuestion}, {"Emphasis", P_Emphasis}, {"ToBIAccent", P_ToBIAccent},
@@ -179,6 +185,19 @@ static int rw_between(const Z2Sent *s, int a, int b)
     return n;
 }
 
+/* Vowel class of a phone, for Phone.Syllable.Word.VowelLength (1 lax, 2 tense, 3 diphthong, 4 no vowel).
+ * The engine's getter is not in the decompile; the classes come from the phone set (zf2_tree.c): every en-US
+ * vowel has one value, so a Zira Pro question like "VowelLength <= 2" picks the lax/tense monophthongs. */
+static int vowel_class(int id)
+{
+    switch (id) {
+    case 8: case 9: case 12: case 18: case 24: case 41: return 1;   /* AE AH AX EH IH UH */
+    case 7: case 10: case 19: case 26: case 42: return 2;           /* AA AO ER IY UW */
+    case 11: case 13: case 20: case 32: case 33: return 3;          /* AW AY EY OW OY */
+    }
+    return 4;
+}
+
 static int get_phone(const Z2Sent *s, int i, int prop, zf2_value *v)
 {
     const Z2P *p = &s->p[i];
@@ -244,6 +263,7 @@ static int get_word(const Z2Sent *s, int i, int prop, zf2_value *v)
         switch (prop) {
         case P_POS: case P_SyllableNumber: case P_FwPosInPhrase: case P_BwPosInPhrase: case P_FwPosInYesNoQuestion:
         case P_BwPosInYesNoQuestion: case P_BreakIndex: case P_POSTaggerPOS: case P_Emphasis: case P_ToBIFinalBoundaryTone:
+        case P_FwPosInIP: case P_BwPosInIP: case P_FwPosInSentence: case P_BwPosInSentence: case P_VowelLength:
             return NUL(v);
         }
         return -1;
@@ -261,6 +281,31 @@ static int get_word(const Z2Sent *s, int i, int prop, zf2_value *v)
     case P_BwPosInPhrase:
         if (w->phrase < 0) return -1;
         return INT(v, rw_between(s, i, s->ph[w->phrase].w1));
+    /* Speech Platform 11: the same position, counted inside the intonation phrase / the sentence */
+    case P_FwPosInIP: case P_BwPosInIP: {
+        int ip;
+        if (w->phrase < 0 || (ip = s->ph[w->phrase].ip) < 0) return NUL(v);
+        if (prop == P_FwPosInIP) return INT(v, rw_between(s, s->ip[ip].ph0, i));
+        return INT(v, rw_between(s, i, s->ip[ip].ph1));
+    }
+    case P_FwPosInSentence:
+        if (s->first_ip < 0) return NUL(v);
+        return INT(v, rw_between(s, s->ip[s->first_ip].ph0, i));
+    case P_BwPosInSentence:
+        if (s->last_ip < 0) return NUL(v);
+        return INT(v, rw_between(s, i, s->ip[s->last_ip].ph1));
+    case P_VowelLength: {
+        int k, cls = 4;
+        for (k = w->s0 + w->ns - 1; k >= w->s0 && k >= 0; k--) {
+            int j, c = 4;
+            for (j = 0; j < s->s[k].np; j++) {           /* the syllable's nucleus: its first vowel */
+                c = vowel_class(s->p[s->s[k].p0 + j].id);
+                if (c < 4) break;
+            }
+            if (c < 4) { cls = c; break; }
+        }
+        return INT(v, cls);
+    }
     case P_FwPosInYesNoQuestion: case P_BwPosInYesNoQuestion: {
         int ph = w->phrase, pos;
         v->kind = -1; v->value = -1;
@@ -292,7 +337,7 @@ static int get_phrase(const Z2Sent *s, int i, int prop, zf2_value *v)
     if (z2_phrase_is_break(s, i)) {
         switch (prop) {
         case P_SyllableNumber: case P_WordNumber: case P_FwPosInSentence: case P_BwPosInSentence:
-        case P_ToBIFinalBoundaryTone: return NUL(v);
+        case P_ToBIFinalBoundaryTone: case P_FwPosInIP: case P_BwPosInIP: return NUL(v);
         }
         return -1;
     }
@@ -305,7 +350,51 @@ static int get_phrase(const Z2Sent *s, int i, int prop, zf2_value *v)
     case P_BwPosInSentence:
         if (s->last_ip < 0) return -1;
         return INT(v, nonbreak_phrases_between(s, i, s->ip[s->last_ip].ph1));
+    case P_FwPosInIP: case P_BwPosInIP:
+        if (p->ip < 0) return NUL(v);
+        if (prop == P_FwPosInIP) return INT(v, nonbreak_phrases_between(s, s->ip[p->ip].ph0, i));
+        return INT(v, nonbreak_phrases_between(s, i, s->ip[p->ip].ph1));
     case P_ToBIFinalBoundaryTone: return ENU(v, z2_is_rw(&s->w[p->w1]) ? s->w[p->w1].tone : 0);
+    }
+    return -1;
+}
+/* the intonation phrase level itself (Speech Platform 11: SyllableNumber, WordNumber, PhraseNumber and the
+ * boundary tone at the end of the intonation phrase) */
+static int ip_syls(const Z2Sent *s, int ipi)
+{
+    int k, n = 0;
+    for (k = s->ip[ipi].ph0; k <= s->ip[ipi].ph1; k++) if (!z2_phrase_is_break(s, k)) n += phrase_syls(s, k);
+    return n;
+}
+static int ip_words(const Z2Sent *s, int ipi)
+{
+    int k, n = 0;
+    for (k = s->ip[ipi].ph0; k <= s->ip[ipi].ph1; k++)
+        if (!z2_phrase_is_break(s, k)) n += rw_between(s, s->ph[k].w0, s->ph[k].w1);
+    return n;
+}
+static int get_ip(const Z2Sent *s, int i, int prop, zf2_value *v)
+{
+    const Z2IP *p = &s->ip[i];
+    if (z2_ip_is_break(s, i)) {
+        switch (prop) {
+        case P_SyllableNumber: case P_WordNumber: case P_PhraseNumber: case P_ToBIFinalBoundaryTone: return NUL(v);
+        }
+        return -1;
+    }
+    switch (prop) {
+    case P_SyllableNumber: return INT(v, ip_syls(s, i));
+    case P_WordNumber: return INT(v, ip_words(s, i));
+    case P_PhraseNumber: return INT(v, nonbreak_phrases_between(s, p->ph0, p->ph1));
+    case P_ToBIFinalBoundaryTone: {
+        int k;
+        for (k = p->ph1; k >= p->ph0; k--)
+            if (!z2_phrase_is_break(s, k)) {
+                int w = s->ph[k].w1;
+                return ENU(v, z2_is_rw(&s->w[w]) ? s->w[w].tone : 0);
+            }
+        return NUL(v);
+    }
     }
     return -1;
 }
@@ -322,6 +411,9 @@ static int get_sent(const Z2Sent *s, int prop, zf2_value *v)
     case P_PhraseNumber:
         for (k = 0; k < s->nph; k++) if (!z2_phrase_is_break(s, k)) n++;
         return INT(v, n);
+    case P_IPNumber:
+        for (k = 0; k < s->nip; k++) if (!z2_ip_is_break(s, k)) n++;
+        return INT(v, n);
     case P_SentenceType: return ENU(v, s->type);
     case P_SentenceEmotion: return ENU(v, s->emotion);
     }
@@ -334,6 +426,7 @@ static int get_value(const Z2Sent *s, Node x, int prop, zf2_value *v)
     case L_SYL: return get_syl(s, x.i, prop, v);
     case L_WORD: return get_word(s, x.i, prop, v);
     case L_PHRASE: return get_phrase(s, x.i, prop, v);
+    case L_IP: return get_ip(s, x.i, prop, v);
     case L_SENT: return get_sent(s, prop, v);
     }
     return -1;

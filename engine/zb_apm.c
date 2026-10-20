@@ -26,11 +26,42 @@ const char *const zb_feature_path[ZB_NFEAT] = {
     "Phone.Syllable.Word.PrevWord.SyllableNumber", "Phone.Syllable.Word.SyllableNumber", "Phone.PhoneIdentity",
     "Phone.Syllable.Word.FwPosInYesNoQuestion", "Phone.Syllable.Word.Phrase.NextPhrase.SyllableNumber",
     "Phone.Syllable.Word.Phrase.NextPhrase.WordNumber", "Phone.Syllable.Word.Phrase.PrevPhrase.SyllableNumber",
-    "Phone.Syllable.Word.Phrase.PrevPhrase.WordNumber", "Phone.Syllable.Word.Phrase.ToBIFinalBoundaryTone"};
+    "Phone.Syllable.Word.Phrase.PrevPhrase.WordNumber", "Phone.Syllable.Word.Phrase.ToBIFinalBoundaryTone",
+    /* Speech Platform 11 additions (see zb.h) */
+    "Phone.Syllable.Word.BreakIndex", "Phone.Syllable.Word.BwPosInIntonationPhrase",
+    "Phone.Syllable.Word.BwPosInSentence", "Phone.Syllable.Word.FwPosInIntonationPhrase",
+    "Phone.Syllable.Word.FwPosInSentence", "Phone.Syllable.Word.NextWord.BreakIndex",
+    "Phone.Syllable.Word.NextWord.ToBIFinalBoundaryTone", "Phone.Syllable.Word.Phrase.BwPosInIntonationPhrase",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.BwPosInSentence",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.FwPosInSentence",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.NextIntonationPhrase.ToBIFinalBoundaryTone",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.NextIntonationPhrase.WordNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.PhraseNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.Sentence.IntonationPhraseNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.SyllableNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.WordNumber",
+    "Phone.Syllable.Word.Phrase.NextPhrase.ToBIFinalBoundaryTone",
+    "Phone.Syllable.Word.Phrase.PrevPhrase.ToBIFinalBoundaryTone", "Phone.Syllable.Word.PrevWord.BreakIndex",
+    "Phone.Syllable.Word.PrevWord.ToBIFinalBoundaryTone", "Phone.Syllable.Word.ToBIFinalBoundaryTone",
+    "Phone.Syllable.Word.VowelLength", "Phone.Syllable.Word.Phrase.FwPosInIntonationPhrase",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.NextIntonationPhrase.PhraseNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.NextIntonationPhrase.SyllableNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.PrevIntonationPhrase.PhraseNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.PrevIntonationPhrase.SyllableNumber",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.PrevIntonationPhrase.ToBIFinalBoundaryTone",
+    "Phone.Syllable.Word.Phrase.IntonationPhrase.PrevIntonationPhrase.WordNumber"};
 
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
 static float rdf(const uint8_t *p) { uint32_t u = rd32(p); float f; memcpy(&f, &u, 4); return f; }
+
+/* Every read of the APM is bounds-checked against the blob: a truncated or malformed voice must fail to load (or
+ * leave a model that yields no leaf), never read past the buffer. */
+static int apm_has(const ZbVoice *v, const uint8_t *p, size_t n)
+{
+    if (!v->apm || p < v->apm) return 0;
+    return (size_t)(p - v->apm) + n <= v->apmsize;
+}
 
 static uint8_t *readfile(const char *path, size_t *n)
 {
@@ -87,6 +118,10 @@ int zb_apm_load(ZbVoice *v, const char *path, char *err, int errlen)
     soff = rd32(h + 0x2c);
     ssize = rd32(h + 0x30);
     if (rd32(h + 0x38)) { snprintf(err, errlen, "Huffman-compressed APM not supported"); return -1; }
+    if ((uint64_t)qoff + 12 > v->apmsize || (uint64_t)moff + 8 > v->apmsize ||
+        (uint64_t)soff + ssize > v->apmsize) {
+        snprintf(err, errlen, "APM header offsets outside the file"); return -1;
+    }
     strtab = d + soff;
     /* question set */
     p = d + qoff;
@@ -94,7 +129,8 @@ int zb_apm_load(ZbVoice *v, const char *path, char *err, int errlen)
         uint32_t named = rd32(p);
         nf = rd32(p + 4);
         p += 8;
-        if (nf > 64) { snprintf(err, errlen, "too many features"); return -1; }
+        if (nf > ZB_MAXFEAT) { snprintf(err, errlen, "too many features"); return -1; }
+        if (!apm_has(v, p, 4 * (size_t)nf + 4)) { snprintf(err, errlen, "APM question set truncated"); return -1; }
         v->nfeat = (int)nf;
         for (i = 0; i < nf; i++) {
             const char *s = name;
@@ -108,14 +144,22 @@ int zb_apm_load(ZbVoice *v, const char *path, char *err, int errlen)
         p += 4 * nf;
         v->nq = (int)rd32(p);
         p += 4;
+        if (v->nq <= 0 || v->nq > 0x100000) { snprintf(err, errlen, "bad question count %d", v->nq); return -1; }
         v->q = (ZbQuestion *)calloc((size_t)v->nq, sizeof *v->q);
         for (i = 0; i < (uint32_t)v->nq; i++) {
             ZbQuestion *q = &v->q[i];
+            uint32_t fi;
+            if (!apm_has(v, p, (named ? 4 : 0) + 12)) { snprintf(err, errlen, "APM question %u truncated", i); return -1; }
             if (named) p += 4;
-            q->feat = v->featcol[rd32(p)];
+            fi = rd32(p);
+            /* a question may only name a feature the voice declared */
+            q->feat = fi < (uint32_t)v->nfeat ? v->featcol[fi] : -1;
             q->op = (int)rd32(p + 4);
             q->nval = (int)rd32(p + 8);
             p += 12;
+            if (q->nval < 0 || q->nval > 4096 || !apm_has(v, p, 4 * (size_t)q->nval)) {
+                snprintf(err, errlen, "APM question %u has a bad value list", i); return -1;
+            }
             q->val = (int32_t *)malloc(sizeof(int32_t) * (q->nval ? q->nval : 1));
             for (k = 0; k < (uint32_t)q->nval; k++) q->val[k] = (int32_t)rd32(p + 4 * k);
             p += 4 * q->nval;
@@ -128,13 +172,24 @@ int zb_apm_load(ZbVoice *v, const char *path, char *err, int errlen)
     v->nmodel = (int)nmod;
     for (i = 0; i < nmod; i++) {
         ZbModel *m = &v->model[i];
-        const uint8_t *mb = d + moff + rd32(p + 4 + 8 * i), *q = mb, *t;
+        uint32_t modoff = moff + rd32(p + 4 + 8 * i);
+        const uint8_t *mb, *q, *t;
         uint32_t n, w, j, treeoff, pooloff, blob;
+        if (modoff >= v->apmsize) { snprintf(err, errlen, "APM model %u beyond end of file", i); return -1; }
+        if (!apm_has(v, d + modoff, 24)) { snprintf(err, errlen, "APM model %u truncated", i); return -1; }
+        mb = d + modoff;
+        q = mb;
+        /* offsets inside a model are relative to its own header; the model runs to the end of the APM */
+        m->mb = mb;
+        m->mbsize = (uint32_t)(v->apmsize - modoff);
         m->type = (int)rd32(q);
         m->msd = (int)rd32(q + 12);
         m->nstate = (int)rd32(q + 16);
         n = rd32(q + 20);
         q += 24;
+        if (n == 0 || n > 4 || !apm_has(v, q, 8 * (size_t)n + 20)) {
+            snprintf(err, errlen, "APM model %u has a bad stream count", i); return -1;
+        }
         m->nstream = (int)n;
         m->totdim = 0;
         for (j = 0; j < n && j < 4; j++) { m->streamdim[j] = (int)rd32(q + 4 * j); m->totdim += m->streamdim[j]; }
@@ -147,23 +202,27 @@ int zb_apm_load(ZbVoice *v, const char *path, char *err, int errlen)
         q += 16;
         m->nwin = (int)rd32(q);
         q += 4;
+        if (m->nwin < 0 || m->nwin > 8) { snprintf(err, errlen, "APM model %u has a bad window count", i); return -1; }
         for (j = 0; j < (uint32_t)m->nwin; j++) {
             uint32_t c;
+            if (!apm_has(v, q, 4)) { snprintf(err, errlen, "APM model %u window truncated", i); return -1; }
             w = rd32(q);
             q += 4;
+            if (w > 8 || !apm_has(v, q, 4 * (size_t)w)) { snprintf(err, errlen, "APM model %u window truncated", i); return -1; }
             if (j < ZB_MAXWIN) {
                 m->winw[j] = (int)w;
                 for (c = 0; c < w && c < 5; c++) m->win[j][c] = rdf(q + 4 * c);
             }
             q += 4 * w;
         }
+        if (!apm_has(v, q, 44)) { snprintf(err, errlen, "APM model %u tail truncated", i); return -1; }
         for (j = 0; j < 10; j++) m->tail[j] = (int)rd32(q + 4 * j);
         q += 40;
         blob = rd32(q);
         q += 4;
-        if (blob >= 8 && rd32(q) == 1) {
+        if (blob >= 8 && apm_has(v, q, 8) && rd32(q) == 1) {
             uint32_t len = rd32(q + 4);
-            if (len <= 64 && 8 + 4 * len + 8 <= blob) {
+            if (len <= 64 && 8 + 4 * len + 8 <= blob && apm_has(v, q, 8 + 4 * (size_t)len + 8)) {
                 m->has_gen = 1;
                 m->genlen = (int)len;
                 for (j = 0; j < len; j++) m->genw[j] = rdf(q + 8 + 4 * j);
@@ -173,16 +232,29 @@ int zb_apm_load(ZbVoice *v, const char *path, char *err, int errlen)
         }
         m->tree = mb + treeoff;
         m->pool = mb + pooloff;
+        if (treeoff >= m->mbsize || pooloff >= m->mbsize ||
+            (uint64_t)pooloff + m->poolsize > m->mbsize) {
+            snprintf(err, errlen, "APM model %u tree/pool outside the model", i); return -1;
+        }
         t = m->tree;
+        if (!apm_has(v, t, 8)) { snprintf(err, errlen, "APM model %u tree truncated", i); return -1; }
         m->ntree = (int)rd32(t);
         if ((int)rd32(t + 4) != m->nstate) { snprintf(err, errlen, "tree/state mismatch"); return -1; }
+        if (m->ntree <= 0 || !apm_has(v, t + 8, (size_t)m->ntree * (4 + 8 * (size_t)m->nstate))) {
+            snprintf(err, errlen, "APM model %u tree header truncated", i); return -1;
+        }
         m->treeid = (int32_t *)malloc(sizeof(int32_t) * m->ntree);
         m->suboff = (uint32_t *)malloc(sizeof(uint32_t) * m->ntree * m->nstate);
         t += 8;
         for (j = 0; j < (uint32_t)m->ntree; j++) {
             int s;
             m->treeid[j] = (int32_t)rd32(t);
-            for (s = 0; s < m->nstate; s++) m->suboff[j * m->nstate + s] = rd32(t + 4 + 8 * s);
+            for (s = 0; s < m->nstate; s++) {
+                m->suboff[j * m->nstate + s] = rd32(t + 4 + 8 * s);
+                if (m->suboff[j * m->nstate + s] >= m->mbsize) {
+                    snprintf(err, errlen, "APM model %u subtree %u outside the model", i, j); return -1;
+                }
+            }
             t += 4 + 8 * m->nstate;
         }
         switch (m->type) {
@@ -219,24 +291,58 @@ static int q_eval(const ZbQuestion *q, int f)
     return 0;
 }
 
+/* A node offset relative to the subtree blob, validated against the model (m->mb + m->mbsize: the bytes from the
+ * model header to the end of the APM) and against the APM blob itself; arithmetic is done on offsets so a bogus
+ * 32-bit offset never forms a pointer past the buffer. */
+static const uint8_t *node_at(const ZbVoice *v, const ZbModel *m, const uint8_t *blob, uint32_t o, size_t n)
+{
+    size_t rel;
+    if (!m->mb || blob < m->mb || blob > m->mb + m->mbsize) return NULL;
+    rel = (size_t)(blob - m->mb);
+    if ((uint64_t)o + n > (uint64_t)(m->mbsize - rel)) return NULL;
+    rel = (size_t)(blob - v->apm);
+    if (rel > v->apmsize || (uint64_t)rel + o + n > (uint64_t)v->apmsize) return NULL;
+    return blob + o;
+}
+
 /* Walk the decision tree of model m for (centre phone id, state); returns the leaf node (its pool offsets at +4).
- * Nodes (file format): internal {u8 0, u8, u16 question, u32 noOff, u32 yesOff}; leaf {u8 1, 3 pad, u32 off[k]}. */
+ * Nodes (file format): internal {u8 0, u8, u16 question, u32 noOff, u32 yesOff}; leaf {u8 1, 3 pad, u32 off[k]}.
+ *
+ * The blob is untrusted data: every node offset is checked against the model (m->mbsize, the bytes from the model
+ * header to the end of the APM) and every question index against the voice's question set (v->nq) before it is
+ * read.  A malformed tree yields NULL, which the callers treat as "cannot synthesize this utterance" -- a speech
+ * engine must never fault on voice data. */
 const uint8_t *zb_tree_leaf(const ZbVoice *v, const ZbModel *m, int phoneid, int state, const int *f)
 {
     int t = 0, guard = 0;
-    const uint8_t *blob;
+    const uint8_t *blob, *node;
     uint32_t o = 4;
+    if (!v || !m || !f || state < 0 || state >= m->nstate) return NULL;
+    if (!v->apm || !v->q || v->nq <= 0 || !m->treeid || !m->suboff || m->ntree <= 0) return NULL;
     if (m->ntree > 1 || m->treeid[0] != 0x7fffffff) {
         for (t = 0; t < m->ntree && m->treeid[t] != phoneid; t++);
         if (t == m->ntree) return NULL;
     }
     blob = m->tree + m->suboff[t * m->nstate + state];
-    while (blob[o] == 0 && guard++ < 100000) {
-        const ZbQuestion *q = &v->q[rd16(blob + o + 2)];
-        int val = q->feat >= 0 ? f[q->feat] : ZB_NULL;
-        o = q_eval(q, val) ? rd32(blob + o + 8) : rd32(blob + o + 4);
+    for (;;) {
+        if (!(node = node_at(v, m, blob, o, 1))) return NULL;
+        if (node[0] == 1) {                                      /* leaf: tag + one pool offset per stream */
+            size_t need = 4 + 4 * (size_t)(m->nstream > 0 ? m->nstream : 0);
+            return node_at(v, m, blob, o, need);
+        }
+        if (node[0] != 0) return NULL;                           /* neither internal node nor leaf */
+        if (!(node = node_at(v, m, blob, o, 12))) return NULL;
+        {
+            uint16_t qi = rd16(node + 2);
+            const ZbQuestion *q;
+            int val;
+            if ((int)qi >= v->nq) return NULL;                   /* question index outside the question set */
+            q = &v->q[qi];
+            val = q->feat >= 0 && q->feat < ZB_NFEAT ? f[q->feat] : ZB_NULL;
+            o = q_eval(q, val) ? rd32(node + 8) : rd32(node + 4);
+        }
+        if (++guard > 100000) return NULL;                       /* cycle in the tree */
     }
-    return blob[o] == 1 ? blob + o : NULL;
 }
 
 /* Build the state Gaussian from a leaf (float pools, FUN_180003e94): per stream s at pool+off[s]:

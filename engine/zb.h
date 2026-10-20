@@ -80,6 +80,38 @@ enum {
     ZB_F_PrevPhraseSyllableNumber,         /* Phone.Syllable.Word.Phrase.PrevPhrase.SyllableNumber */
     ZB_F_PrevPhraseWordNumber,             /* Phone.Syllable.Word.Phrase.PrevPhrase.WordNumber */
     ZB_F_PhraseToBIFinalBoundaryTone,      /* Phone.Syllable.Word.Phrase.ToBIFinalBoundaryTone (Mark) */
+    /* Microsoft Speech Platform 11 packs (Zira Pro and the other SPP voices) declare 67 features: the 45 above
+     * plus the 29 structural ones below. They are all Phrase/IntonationPhrase/Sentence positions and boundary
+     * tones that the OneCore voices never ask for. Appended: the column numbers of the existing 45 never move. */
+    ZB_F_WordBreakIndex,                   /* Phone.Syllable.Word.BreakIndex */
+    ZB_F_WordBwPosInIP,                    /* Phone.Syllable.Word.BwPosInIntonationPhrase */
+    ZB_F_WordBwPosInSentence,              /* Phone.Syllable.Word.BwPosInSentence */
+    ZB_F_WordFwPosInIP,                    /* Phone.Syllable.Word.FwPosInIntonationPhrase */
+    ZB_F_WordFwPosInSentence,              /* Phone.Syllable.Word.FwPosInSentence */
+    ZB_F_NextWordBreakIndex,               /* Phone.Syllable.Word.NextWord.BreakIndex */
+    ZB_F_NextWordToBITone,                 /* Phone.Syllable.Word.NextWord.ToBIFinalBoundaryTone */
+    ZB_F_PhraseBwPosInIP,                  /* Phone.Syllable.Word.Phrase.BwPosInIntonationPhrase */
+    ZB_F_IPBwPosInSentence,                /* ...Phrase.IntonationPhrase.BwPosInSentence */
+    ZB_F_IPFwPosInSentence,                /* ...Phrase.IntonationPhrase.FwPosInSentence */
+    ZB_F_NextIPToBITone,                   /* ...IntonationPhrase.NextIntonationPhrase.ToBIFinalBoundaryTone */
+    ZB_F_NextIPWordNumber,                 /* ...IntonationPhrase.NextIntonationPhrase.WordNumber */
+    ZB_F_IPPhraseNumber,                   /* ...Phrase.IntonationPhrase.PhraseNumber */
+    ZB_F_SentIPNumber,                     /* ...IntonationPhrase.Sentence.IntonationPhraseNumber */
+    ZB_F_IPSyllableNumber,                 /* ...Phrase.IntonationPhrase.SyllableNumber */
+    ZB_F_IPWordNumber,                     /* ...Phrase.IntonationPhrase.WordNumber */
+    ZB_F_NextPhraseToBITone,               /* Phone.Syllable.Word.Phrase.NextPhrase.ToBIFinalBoundaryTone */
+    ZB_F_PrevPhraseToBITone,               /* Phone.Syllable.Word.Phrase.PrevPhrase.ToBIFinalBoundaryTone */
+    ZB_F_PrevWordBreakIndex,               /* Phone.Syllable.Word.PrevWord.BreakIndex */
+    ZB_F_PrevWordToBITone,                 /* Phone.Syllable.Word.PrevWord.ToBIFinalBoundaryTone */
+    ZB_F_WordToBITone,                     /* Phone.Syllable.Word.ToBIFinalBoundaryTone */
+    ZB_F_WordVowelLength,                  /* Phone.Syllable.Word.VowelLength */
+    ZB_F_PhraseFwPosInIP,                  /* Phone.Syllable.Word.Phrase.FwPosInIntonationPhrase */
+    ZB_F_NextIPPhraseNumber,               /* ...IntonationPhrase.NextIntonationPhrase.PhraseNumber */
+    ZB_F_NextIPSyllableNumber,             /* ...IntonationPhrase.NextIntonationPhrase.SyllableNumber */
+    ZB_F_PrevIPPhraseNumber,               /* ...IntonationPhrase.PrevIntonationPhrase.PhraseNumber */
+    ZB_F_PrevIPSyllableNumber,             /* ...IntonationPhrase.PrevIntonationPhrase.SyllableNumber */
+    ZB_F_PrevIPToBITone,                   /* ...IntonationPhrase.PrevIntonationPhrase.ToBIFinalBoundaryTone */
+    ZB_F_PrevIPWordNumber,                 /* ...IntonationPhrase.PrevIntonationPhrase.WordNumber */
     ZB_NFEAT
 };
 extern const char *const zb_feature_path[ZB_NFEAT];   /* full dotted APM path per column */

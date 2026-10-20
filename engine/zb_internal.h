@@ -8,6 +8,7 @@
 #define ZB_MAXWIN 3
 #define ZB_MAXDIM 75
 #define ZB_NSTATE 5
+#define ZB_MAXFEAT 128   /* APM features a voice may declare (OneCore 44, Speech Platform 11 67) */
 
 /* model types (CHTSAcousticModelHeader +0) */
 enum { ZB_M_LSF = 1, ZB_M_LF0 = 2, ZB_M_DUR = 3, ZB_M_PDUR = 6, ZB_M_MBE = 7 };
@@ -28,6 +29,9 @@ typedef struct {
     const uint8_t *tree;           /* tree region */
     const uint8_t *pool;           /* pool region (starts with u32 nEntries) */
     uint32_t poolsize;
+    const uint8_t *mb;             /* model header (offsets are relative to it) */
+    uint32_t mbsize;               /* bytes from the model header to the end of the APM: every tree/pool offset the
+                                    * model carries is validated against it, see zb_tree_leaf */
     int ntree;
     int32_t *treeid;               /* [ntree] */
     uint32_t *suboff;              /* [ntree*nstate] offsets of the sub-tree blobs from the tree region */
@@ -77,7 +81,7 @@ struct ZbVoice {
     int isint;                     /* APM header flag B (file 0x24) */
     int rate, bits, shift;
     int nfeat;                     /* APM features */
-    int featcol[64];               /* APM feature index -> ZB_F_* */
+    int featcol[ZB_MAXFEAT];       /* APM feature index -> ZB_F_* */
     int nq;
     ZbQuestion *q;
     int nmodel;
