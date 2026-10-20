@@ -1,3 +1,0 @@
-C:/src/SapiDroid/app/.cxx/Debug/1s1142f7/armeabi-v7a/CMakeFiles/sapidroid.dir
-C:/src/SapiDroid/app/.cxx/Debug/1s1142f7/armeabi-v7a/CMakeFiles/edit_cache.dir
-C:/src/SapiDroid/app/.cxx/Debug/1s1142f7/armeabi-v7a/CMakeFiles/rebuild_cache.dir
