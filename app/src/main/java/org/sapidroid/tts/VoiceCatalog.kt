@@ -13,7 +13,7 @@ object VoiceCatalog {
     /** OneCore output rate; SAPI 4 reports its own per mode. */
     const val SAMPLE_RATE = 16000
 
-    enum class Engine { ONECORE, SAPI4 }
+    enum class Engine { ONECORE, SAPI4, SAPI5 }
 
     data class Info(
         val engine: Engine,
@@ -37,15 +37,28 @@ object VoiceCatalog {
         "RoboSoft Four", "RoboSoft Five", "RoboSoft Six",
     ).map { Info(Engine.SAPI4, it, "$it (SAPI 4)") }
 
-    val all: List<Info> = sapi4 + oneCore
+    /**
+     * SAPI 5's Sam, Mike and Mary. Different engine from the SAPI 4 voices of
+     * the same names, so their internal names carry the 5.
+     */
+    private val sapi5 = listOf(
+        Info(Engine.SAPI5, "Sam5", "Sam (SAPI 5)"),
+        Info(Engine.SAPI5, "Mike5", "Mike (SAPI 5)"),
+        Info(Engine.SAPI5, "Mary5", "Mary (SAPI 5)"),
+    )
+
+    val all: List<Info> = sapi5 + sapi4 + oneCore
 
     val defaultVoice: String = "David"
 
     fun infoFor(name: String?): Info? {
         if (name == null) return null
-        val bare = name.removeSuffix(" (SAPI 4)").removeSuffix(" (OneCore)")
+        all.firstOrNull { it.label.equals(name, ignoreCase = true) }?.let { return it }
+        all.firstOrNull { it.name.equals(name, ignoreCase = true) }?.let { return it }
+        val bare = name.removeSuffix(" (SAPI 5)")
+            .removeSuffix(" (SAPI 4)")
+            .removeSuffix(" (OneCore)")
         return all.firstOrNull { it.name.equals(bare, ignoreCase = true) }
-            ?: all.firstOrNull { it.label.equals(name, ignoreCase = true) }
     }
 
     fun forLocale(lang: String?, country: String?): Info =

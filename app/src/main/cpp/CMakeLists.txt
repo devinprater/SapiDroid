@@ -51,9 +51,22 @@ list(APPEND SAPI4_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/sapidroid_sapi4_jni.c
 )
 
-add_library(sapidroid SHARED sapidroid_jni.c ${ENGINE_SOURCES} ${SAPI4_SOURCES})
+set(SAPI5_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sapi5)
+set(SAPI5_SOURCES
+    ${SAPI5_DIR}/sam.c
+    ${SAPI5_DIR}/sam_lex.c
+    ${SAPI5_DIR}/sam_morph.c
+    ${SAPI5_DIR}/sam_pos.c
+    ${SAPI5_DIR}/sam_norm.c
+    ${SAPI5_DIR}/sam_front.c
+    ${SAPI5_DIR}/sam4fx.c
+    ${SAPI5_DIR}/sam_tts.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/sapidroid_sapi5_jni.c
+)
 
-target_include_directories(sapidroid PRIVATE ${ENGINE_DIR} ${SAPI4_DIR}/lib ${SAPI4_DIR}/src ${SAPI4_DIR}/port)
+add_library(sapidroid SHARED sapidroid_jni.c ${ENGINE_SOURCES} ${SAPI4_SOURCES} ${SAPI5_SOURCES})
+
+target_include_directories(sapidroid PRIVATE ${ENGINE_DIR} ${SAPI4_DIR}/lib ${SAPI4_DIR}/src ${SAPI4_DIR}/port ${SAPI5_DIR})
 
 # The engine is bit-exact only without floating point contraction and fast math.
 target_compile_options(sapidroid PRIVATE

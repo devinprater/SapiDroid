@@ -40,9 +40,11 @@ class SapiDroidWorkerService : Service() {
 
     private val ziraHandles = HashMap<String, Long>()
     private val s4Handles = HashMap<String, Long>()
+    private val s5Handles = HashMap<String, Long>()
 
     @Volatile private var ziraDir: File? = null
     @Volatile private var s4Dir: File? = null
+    @Volatile private var s5Dir: File? = null
     @Volatile private var openError: String = ""
     private var s4Initialised = false
 
@@ -87,6 +89,21 @@ class SapiDroidWorkerService : Service() {
             return 0
         }
         s4Handles[mode] = handle
+        return handle
+    }
+
+    private fun openSapi5(voice: String): Long {
+        s5Handles[voice]?.let { if (it != 0L) return it }
+        val dir = s5Dir ?: return 0
+        // Internal names carry a 5 so they cannot collide with the SAPI 4 voices.
+        val engineVoice = voice.removeSuffix("5")
+        val handle = NativeSapi5.open(dir.absolutePath, engineVoice)
+        if (handle == 0L) {
+            openError = "no SAPI 5 voice data for $engineVoice in ${dir.absolutePath}"
+            Log.e(TAG, openError)
+            return 0
+        }
+        s5Handles[voice] = handle
         return handle
     }
 
@@ -173,6 +190,7 @@ class SapiDroidWorkerService : Service() {
                 handle = when (engine) {
                     VoiceCatalog.Engine.ONECORE -> ziraHandles[currentVoice] ?: 0L
                     VoiceCatalog.Engine.SAPI4 -> s4Handles[currentVoice] ?: 0L
+                    VoiceCatalog.Engine.SAPI5 -> s5Handles[currentVoice] ?: 0L
                     null -> 0L
                 }
                 (state as java.lang.Object).notifyAll()
@@ -182,6 +200,7 @@ class SapiDroidWorkerService : Service() {
                     when (engine) {
                         VoiceCatalog.Engine.ONECORE -> NativeZira.cancel(handle)
                         VoiceCatalog.Engine.SAPI4 -> NativeSapi4.cancel(handle)
+                        VoiceCatalog.Engine.SAPI5 -> NativeSapi5.cancel(handle)
                         null -> {}
                     }
                 } catch (t: Throwable) {
@@ -204,6 +223,10 @@ class SapiDroidWorkerService : Service() {
                     val h = openSapi4(info.name)
                     if (h != 0L) NativeSapi4.sampleRate(h) else 0
                 }
+                VoiceCatalog.Engine.SAPI5 -> {
+                    val h = openSapi5(info.name)
+                    if (h != 0L) NativeSapi5.sampleRate(h) else 0
+                }
             }
         }
 
@@ -212,6 +235,7 @@ class SapiDroidWorkerService : Service() {
             val ok = when (info.engine) {
                 VoiceCatalog.Engine.ONECORE -> openZira(info.name) != 0L
                 VoiceCatalog.Engine.SAPI4 -> openSapi4(info.name) != 0L
+                VoiceCatalog.Engine.SAPI5 -> openSapi5(info.name) != 0L
             }
             return if (ok) "" else openError.ifEmpty { "voice data missing" }
         }
@@ -221,6 +245,7 @@ class SapiDroidWorkerService : Service() {
         super.onCreate()
         ziraDir = File(filesDir, "voice").also { it.mkdirs() }
         s4Dir = File(filesDir, "sapi4").also { it.mkdirs() }
+        s5Dir = File(filesDir, "sapi5").also { it.mkdirs() }
         Thread {
             try {
                 openZira(VoiceCatalog.defaultVoice)
@@ -256,6 +281,14 @@ class SapiDroidWorkerService : Service() {
                         NativeZira.setRate(h, sapi5Rate(ratePercent))
                         NativeZira.setPitch(h, sapi5Pitch(pitchPercent))
                         NativeZira.speak(h, text)
+                    }
+                }
+                VoiceCatalog.Engine.SAPI5 -> {
+                    val h = openSapi5(info.name)
+                    if (h == 0L) null else {
+                        NativeSapi5.setRate(h, sapi5Rate(ratePercent))
+                        NativeSapi5.setPitch(h, sapi5Pitch(pitchPercent))
+                        NativeSapi5.speak(h, text)
                     }
                 }
                 VoiceCatalog.Engine.SAPI4 -> {
@@ -340,6 +373,14 @@ class SapiDroidWorkerService : Service() {
                 }
             }
             s4Handles.clear()
+            for (h in s5Handles.values) {
+                try {
+                    NativeSapi5.close(h)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "sapi5 close failed", t)
+                }
+            }
+            s5Handles.clear()
         }
         super.onDestroy()
     }

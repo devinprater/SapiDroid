@@ -11,8 +11,8 @@ android {
         applicationId = "org.sapidroid.tts"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
