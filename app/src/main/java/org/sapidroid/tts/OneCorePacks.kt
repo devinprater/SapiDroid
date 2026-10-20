@@ -7,8 +7,8 @@ package org.sapidroid.tts
  *
  * `prefix` is the name the bundle gives the voice's files ("M2057George.APM");
  * the installer renames them to "M1033George.APM", which is what the engine
- * looks for. The newer voices in the same bundle use a model format this engine
- * cannot load, so they are not offered.
+ * looks for. Three voices in the same bundle (Sarah, Eva, Matilda) use a model
+ * format this engine cannot load, so they are not offered.
  */
 object OneCorePacks {
 
@@ -25,6 +25,10 @@ object OneCorePacks {
         Pack("George", "M2057George", "English (United Kingdom)", "en-GB"),
         Pack("Susan", "M2057Susan", "English (United Kingdom)", "en-GB"),
         Pack("Hazel", "M2057Hazel", "English (United Kingdom)", "en-GB"),
+        Pack("James", "M3081James", "English (Australia)", "en-AU"),
+        Pack("Catherine", "M3081Catherine", "English (Australia)", "en-AU"),
+        Pack("Richard", "M4105Richard", "English (India)", "en-IN"),
+        Pack("Linda", "M4105Linda", "English (India)", "en-IN"),
     )
 
     /** What the menu says about everything it cannot offer. */
@@ -32,9 +36,8 @@ object OneCorePacks {
         "Everything here comes from one download, Sapple's 200 MB app bundle, " +
             "which carries Microsoft's voice files for personal use. It is kept " +
             "until you close this screen, so picking several voices downloads it " +
-            "once. Voices built on Microsoft's newer model (Sarah, Eva, James, " +
-            "Matilda, Catherine, Richard, Linda) are not offered: this engine " +
-            "cannot load them."
+            "once. Three voices in the bundle are not offered because this engine " +
+            "cannot load their model: Sarah and Eva, and Matilda."
 
     fun byVoice(voice: String): Pack? = all.firstOrNull { it.voice == voice }
 }
