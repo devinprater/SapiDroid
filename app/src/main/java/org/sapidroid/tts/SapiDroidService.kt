@@ -101,8 +101,14 @@ class SapiDroidService : TextToSpeechService() {
         )
     }.toMutableList()
 
-    override fun onIsValidVoiceName(voiceName: String?): Int =
-        if (VoiceCatalog.infoFor(voiceName) != null) TextToSpeech.SUCCESS else TextToSpeech.ERROR
+    override fun onIsValidVoiceName(voiceName: String?): Int {
+        val info = VoiceCatalog.infoFor(voiceName) ?: return TextToSpeech.ERROR
+        return if (VoiceCatalog.installed(this).any { it.label == info.label }) {
+            TextToSpeech.SUCCESS
+        } else {
+            TextToSpeech.ERROR
+        }
+    }
 
     override fun onLoadVoice(voiceName: String?): Int = onIsValidVoiceName(voiceName)
 
@@ -121,8 +127,19 @@ class SapiDroidService : TextToSpeechService() {
     override fun onLoadLanguage(lang: String?, country: String?, variant: String?): Int =
         onIsLanguageAvailable(lang, country, variant)
 
-    override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String =
-        VoiceCatalog.forLocale(lang, country).label
+    override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String {
+        val installed = VoiceCatalog.installed(this)
+        // An empty name is the platform's "no default"; it must not name a
+        // voice that onIsValidVoiceName would then refuse.
+        if (installed.isEmpty()) return ""
+        // The app's picker wins over the locale: every voice this engine has
+        // shares the en-US frontend table, and a screen reader only sets a
+        // language, so otherwise David would always speak.
+        val name = VoiceCatalog.savedVoice(this)?.label
+            ?: VoiceCatalog.forLocale(lang, country, installed).label
+        Log.i(TAG, "default voice for $lang-$country: $name")
+        return name
+    }
 
     // ------------------------------------------------------------------
     // Synthesis
@@ -151,13 +168,14 @@ class SapiDroidService : TextToSpeechService() {
         }
 
         val info = VoiceCatalog.infoFor(request.voiceName)
-            ?: VoiceCatalog.forLocale(request.language, request.country)
+            ?: VoiceCatalog.savedVoice(this)
+            ?: VoiceCatalog.forLocale(request.language, request.country, VoiceCatalog.installed(this))
         val voice = info.label
         val ratePercent = request.speechRate.takeIf { it > 0 } ?: 100
         val pitchPercent = request.pitch.takeIf { it > 0 } ?: 100
 
-        Log.i(TAG, "synth start voice=$voice engine=${info.engine} chars=${text.length} " +
-            "rate=$ratePercent pitch=$pitchPercent")
+        Log.i(TAG, "synth start voice=$voice requested=${request.voiceName} " +
+            "engine=${info.engine} chars=${text.length} rate=$ratePercent pitch=$pitchPercent")
 
         var worker = currentWorker
         val pcm: ShortArray? = try {

@@ -24,6 +24,20 @@
             android:layout_marginTop="12dp"
             android:textSize="15sp" />
 
+        <TextView
+            android:id="@+id/voiceLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:labelFor="@+id/voiceSpinner"
+            android:text="@string/voice_label" />
+
+        <Spinner
+            android:id="@+id/voiceSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp" />
+
         <Button
             android:id="@+id/oneCoreVoicesButton"
             android:layout_width="match_parent"

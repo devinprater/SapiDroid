@@ -1,5 +1,6 @@
 package org.sapidroid.tts
 
+import android.content.Context
 import java.util.Locale
 
 /**
@@ -12,6 +13,12 @@ object VoiceCatalog {
 
     /** OneCore output rate; SAPI 4 reports its own per mode. */
     const val SAMPLE_RATE = 16000
+
+    /** The eight files Microsoft's Speech SDK 5.1 puts in `files/sapi5`. */
+    val sapi5Files = listOf(
+        "Sam.spd", "Sam.sdf", "Mike.spd", "Mike.sdf",
+        "Mary.spd", "Mary.sdf", "LTTS1033.LXA", "r1033tts.LXA"
+    )
 
     enum class Engine { ONECORE, ANNA, SAPI4, SAPI5 }
 
@@ -73,18 +80,53 @@ object VoiceCatalog {
 
     val defaultVoice: String = "David"
 
+    private const val PREFS = "sapidroid"
+    private const val KEY_DEFAULT_VOICE = "default_voice"
+
     /**
-     * The voices whose data is actually present. A OneCore voice is there when
-     * its M1033<name>.APM file is; the other engines keep their own folders, so
-     * everything else is reported and the engine says if it is missing.
+     * The voice chosen in the app's picker. Screen readers and other apps do
+     * not choose a voice themselves: they set a language and take the engine's
+     * default, which is this voice.
+     */
+    fun savedVoice(context: Context): Info? {
+        val label = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_DEFAULT_VOICE, null) ?: return null
+        val info = infoFor(label) ?: return null
+        return if (installed(context).any { it.label == info.label }) info else null
+    }
+
+    fun saveVoice(context: Context, info: Info) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_DEFAULT_VOICE, info.label).apply()
+    }
+
+    /**
+     * The voices whose data is actually on the device, so the picker and the
+     * system's voice list never offer a voice that could not load. OneCore needs
+     * the voice's own APM and the shared frontend table beside it; the other
+     * engines keep one folder each.
      */
     fun installed(context: android.content.Context): List<Info> {
-        val voice = java.io.File(context.filesDir, "voice")
+        val files = context.filesDir
+        val oneCore = java.io.File(files, "voice")
+        val anna = java.io.File(files, "anna")
+        val sapi4 = java.io.File(files, "sapi4")
+        val sapi5 = java.io.File(files, "sapi5")
+
+        val shared = java.io.File(oneCore, SappleVoices.SHARED_DATA)
+            .let { it.isFile && it.length() > 0 }
+        val sapi4Ready = listOf("msttssyn.dll", "sam.vce", "male.vce", "female.vce")
+            .all { java.io.File(sapi4, it).isFile }
+        val sapi5Ready = sapi5Files.all { java.io.File(sapi5, it).isFile }
+        val annaReady = java.io.File(anna, "M1033DSK.CSD").isFile
+
         return all.filter { info ->
             when (info.engine) {
-                Engine.ONECORE -> java.io.File(voice, "M1033${info.name}.APM").exists() ||
-                    info.name == defaultVoice
-                else -> true
+                Engine.ONECORE ->
+                    shared && java.io.File(oneCore, "M1033${info.name}.APM").isFile
+                Engine.ANNA -> annaReady
+                Engine.SAPI4 -> sapi4Ready
+                Engine.SAPI5 -> sapi5Ready
             }
         }
     }
@@ -99,9 +141,15 @@ object VoiceCatalog {
         return all.firstOrNull { it.name.equals(bare, ignoreCase = true) }
     }
 
-    fun forLocale(lang: String?, country: String?): Info =
-        all.firstOrNull {
+    /**
+     * The first voice in [voices] for the language, else David if he is there,
+     * else the first voice.
+     */
+    fun forLocale(lang: String?, country: String?, voices: List<Info> = all): Info =
+        voices.firstOrNull {
             it.locale.language.equals(lang, ignoreCase = true) &&
                 (country.isNullOrEmpty() || it.locale.country.equals(country, ignoreCase = true))
-        } ?: all.first { it.name == defaultVoice }
+        } ?: voices.firstOrNull { it.name == defaultVoice }
+            ?: voices.firstOrNull()
+            ?: all.first { it.name == defaultVoice }
 }
