@@ -25,6 +25,13 @@ object SappleVoices {
     const val BYTES = 199_534_081L
     const val SHA256 = "5fc076aedf21473caf70db663632005839c637d7f0c14ebd0dd46bbfbb9829f1"
 
+    /**
+     * The frontend table every OneCore voice is read with. The engine always
+     * opens this file from the voice folder, whichever voice it speaks with, so
+     * a voice is useless without it.
+     */
+    const val SHARED_DATA = "MSTTSLocEnUS.dat"
+
     private const val APP = "Payload/Sapple.app/PlugIns/ClassicVoicesExtension.appex/"
 
     /** True when the bundle is already on disk, so a second pick costs nothing. */
@@ -84,9 +91,37 @@ object SappleVoices {
                 }
                 written += dest.name
             }
+            if (installSharedData(zip, out)) written += SHARED_DATA
         }
         Log.i(TAG, "$voice installed from Sapple: $written")
         return written
+    }
+
+    /**
+     * Copies the shared table if it is not there yet. An existing copy, such as
+     * the one from Windows, is left alone. The new file is renamed into place so
+     * a half-written table can never be mistaken for a usable one.
+     */
+    private fun installSharedData(zip: java.util.zip.ZipFile, out: File): Boolean {
+        val existing = File(out, SHARED_DATA)
+        if (existing.isFile && existing.length() > 0) return false
+        val entry = zip.getEntry(APP + "OneCoreVoice/" + SHARED_DATA)
+            ?: throw java.io.IOException("$SHARED_DATA is not in the bundle")
+        val part = File(out, "$SHARED_DATA.part")
+        part.delete()
+        try {
+            zip.getInputStream(entry).use { input ->
+                FileOutputStream(part).use { output -> input.copyTo(output, 1 shl 16) }
+            }
+            java.nio.file.Files.move(
+                part.toPath(),
+                existing.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        } finally {
+            part.delete()
+        }
+        return true
     }
 
     /** Deletes the cached bundle; called when the app closes. */

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android reads this to put a settings shortcut beside SapiDroid in
+     Settings > Accessibility > Text-to-speech output. -->
+<tts-engine xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="org.sapidroid.tts.MainActivity" />

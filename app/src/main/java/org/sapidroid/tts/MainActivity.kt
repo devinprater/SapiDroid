@@ -4,8 +4,13 @@ import android.app.Activity
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.TextView
 
 /** Settings and a test line. The voice data is staged into the app's external files folder. */
@@ -22,13 +27,37 @@ class MainActivity : Activity() {
     private var tts: TextToSpeech? = null
     private lateinit var statusText: TextView
     private lateinit var resultText: TextView
+    private lateinit var voiceSpinner: Spinner
+
+    /** The voices whose data is on the device, in the picker's order. */
+    private var voices: List<VoiceCatalog.Info> = emptyList()
+
+    /** The picker's choice, kept while the picker itself is rebuilt. */
+    private var selectedVoice: String? = null
+    private var refreshingVoices = false
+    private var engineReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         statusText = findViewById(R.id.statusText)
         resultText = findViewById(R.id.resultText)
-        showVoiceData()
+        voiceSpinner = findViewById(R.id.voiceSpinner)
+        voiceSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                if (refreshingVoices) return
+                val info = voices.getOrNull(position) ?: return
+                selectedVoice = info.label
+                useVoice(info)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
         android.util.Log.i(TAG, "debug=${BuildConfig.DEBUG} download=${intent.getBooleanExtra("download", false)} extras=${intent.extras}")
 
 
@@ -55,7 +84,11 @@ class MainActivity : Activity() {
                                 SappleVoices.installVoice(this, pack.voice, pack.prefix) { m ->
                                     runOnUiThread { resultText.text = m }
                                 }
-                                runOnUiThread { resultText.text = "${pack.voice} installed." }
+                                runOnUiThread {
+                                    resultText.text = "${pack.voice} installed."
+                                    showVoiceData()
+                                    refreshVoices()
+                                }
                             } catch (t: Throwable) {
                                 android.util.Log.e(TAG, "pack failed", t)
                                 runOnUiThread { resultText.text = "failed: ${t.message}" }
@@ -67,29 +100,115 @@ class MainActivity : Activity() {
         }
 
         tts = TextToSpeech(this, { status ->
-            resultText.text = if (status == TextToSpeech.SUCCESS) "Engine ready." else "Engine init failed ($status)."
+            engineReady = status == TextToSpeech.SUCCESS
             if (status == TextToSpeech.SUCCESS) {
+                resultText.text = "Engine ready."
+                selectedVoice?.let { name -> VoiceCatalog.infoFor(name)?.let { useVoice(it, announce = false) } }
                 if (BuildConfig.DEBUG) {
                     intent.getStringExtra("localexe")?.let { installFromLocalExe(it) }
                     if (intent.getBooleanExtra("download", false)) downloadSapi5()
                 }
                 tryAutospeak()
+            } else {
+                resultText.text = "Engine init failed ($status)."
             }
         }, ENGINE_PACKAGE)
 
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {
-                runOnUiThread { resultText.text = "Speaking…" }
+                showResult(getString(R.string.speak_started), announce = true)
             }
 
             override fun onDone(id: String?) {
-                runOnUiThread { resultText.text = "Done." }
+                showResult(getString(R.string.speak_done), announce = true)
             }
 
-            override fun onError(id: String?) {
-                runOnUiThread { resultText.text = "Error speaking. Is the voice data in the folder above?" }
+            /** Android calls this form from API 21 on; the one-argument form is dead. */
+            override fun onError(id: String?, errorCode: Int) {
+                val message = if (errorCode == TextToSpeech.ERROR_SYNTHESIS) {
+                    getString(R.string.speak_failed)
+                } else {
+                    getString(R.string.speak_error, errorCode)
+                }
+                showResult(message, announce = true)
+            }
+
+            override fun onError(id: String?) = onError(id, TextToSpeech.ERROR_SYNTHESIS)
+
+            override fun onStop(id: String?, interrupted: Boolean) {
+                showResult(getString(R.string.speak_stopped))
             }
         })
+    }
+
+    override fun onResume() {
+        super.onResume()
+        showVoiceData()
+        refreshVoices()
+    }
+
+    /** Rebuilds the picker from the data now on the device. */
+    private fun refreshVoices() {
+        val previous = selectedVoice
+        voices = VoiceCatalog.installed(this)
+        val saved = VoiceCatalog.savedVoice(this)?.label
+        val restored = voices.indexOfFirst { it.label == previous }
+        val savedIndex = voices.indexOfFirst { it.label == saved }
+        val preferred = voices.indexOfFirst { it.name == VoiceCatalog.defaultVoice }
+        val index = when {
+            restored >= 0 -> restored
+            savedIndex >= 0 -> savedIndex
+            preferred >= 0 -> preferred
+            else -> 0
+        }
+        refreshingVoices = true
+        try {
+            val labels = voices.map { it.label }
+            val adapter = ArrayAdapter(
+                this,
+                android.R.layout.simple_spinner_item,
+                if (labels.isEmpty()) listOf(getString(R.string.no_voices)) else labels
+            )
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            voiceSpinner.adapter = adapter
+            voiceSpinner.isEnabled = voices.isNotEmpty()
+            if (voices.isNotEmpty()) voiceSpinner.setSelection(index)
+            selectedVoice = voices.getOrNull(index)?.label
+        } finally {
+            refreshingVoices = false
+        }
+        // The picker's choice is the engine's default, so other apps (Backtalk
+        // among them) speak with it from their next utterance.
+        if (engineReady) voices.getOrNull(index)?.let { useVoice(it, announce = false) }
+    }
+
+    /** Hands an installed voice to the engine, remembers it, says if it would not take it. */
+    private fun useVoice(info: VoiceCatalog.Info, announce: Boolean = true) {
+        val engine = tts ?: return
+        if (!engineReady) return
+        val voice = Voice(
+            info.label,
+            info.locale,
+            Voice.QUALITY_HIGH,
+            Voice.LATENCY_NORMAL,
+            false,
+            emptySet()
+        )
+        val result = engine.setVoice(voice)
+        if (result == TextToSpeech.SUCCESS) {
+            VoiceCatalog.saveVoice(this, info)
+            if (announce) showResult(getString(R.string.voice_selected, info.label))
+        } else if (announce) {
+            showResult(getString(R.string.voice_refused, info.label), announce = true)
+        }
+    }
+
+    /** Shows a message, and optionally announces it so a screen reader hears it. */
+    private fun showResult(message: String, announce: Boolean = false) {
+        runOnUiThread {
+            resultText.text = message
+            if (announce) resultText.announceForAccessibility(message)
+        }
     }
 
     /**
@@ -153,6 +272,7 @@ class MainActivity : Activity() {
                     resultText.text = "SAPI 4 voices installed: ${names.joinToString(", ")}"
                     button.isEnabled = true
                     showVoiceData()
+                    refreshVoices()
                 }
             } catch (t: Throwable) {
                 android.util.Log.e(TAG, "SAPI 4 download failed", t)
@@ -201,6 +321,7 @@ class MainActivity : Activity() {
                     resultText.text = "Anna installed."
                     button.isEnabled = true
                     showVoiceData()
+                    refreshVoices()
                 }
             } catch (t: Throwable) {
                 android.util.Log.e(TAG, "Anna download failed", t)
@@ -226,6 +347,7 @@ class MainActivity : Activity() {
                     resultText.text = "SAPI 5 voices installed: ${names.joinToString(", ")}"
                     button.isEnabled = true
                     showVoiceData()
+                    refreshVoices()
                 }
             } catch (t: Throwable) {
                 android.util.Log.e(TAG, "SAPI 5 download failed", t)
@@ -244,23 +366,24 @@ class MainActivity : Activity() {
         fun has(dir: java.io.File, name: String) = java.io.File(dir, name).exists()
         statusText.text = buildString {
             append("OneCore: ")
-            append(if (has(oneCore, "M1033David.APM")) "David " else "David missing ")
-            append(if (has(oneCore, "M1033Zira.APM")) "Zira" else "Zira missing")
-            append(if (has(oneCore, "M1033Mark.APM")) " Mark" else " Mark missing")
-            append(if (has(oneCore, "MSTTSLocEnUS.dat")) "" else ", shared data missing")
+            append(
+                listOf("David", "Zira", "Mark").joinToString(", ") { name ->
+                    if (has(oneCore, "M1033$name.APM")) name else "$name missing"
+                }
+            )
+            if (!has(oneCore, SappleVoices.SHARED_DATA)) append("; shared data missing")
             append(SEP + "Anna: ")
             append(if (has(java.io.File(filesDir, "anna"), "M1033DSK.CSD")) "installed" else "not installed")
             append(SEP + "SAPI 4: ")
-            append(
-                if (has(s4, "msttssyn.dll") && has(s4, "sam.vce")) "installed"
-                else "not installed"
-            )
+            val sapi4 = has(s4, "msttssyn.dll") && has(s4, "sam.vce") &&
+                has(s4, "male.vce") && has(s4, "female.vce")
+            append(if (sapi4) "installed" else "not installed")
             append(SEP + "SAPI 5: ")
-            val count = listOf(
-                "Sam.spd", "Sam.sdf", "Mike.spd", "Mike.sdf",
-                "Mary.spd", "Mary.sdf", "LTTS1033.LXA", "r1033tts.LXA"
-            ).count { has(s5, it) }
-            append(if (count == 8) "installed" else "$count of 8 files")
+            val count = VoiceCatalog.sapi5Files.count { has(s5, it) }
+            append(
+                if (count == VoiceCatalog.sapi5Files.size) "installed"
+                else "$count of ${VoiceCatalog.sapi5Files.size} files"
+            )
         }
     }
 
@@ -274,6 +397,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     resultText.text = "Local extraction: ${names.size} files"
                     showVoiceData()
+                    refreshVoices()
                 }
             } catch (t: Throwable) {
                 android.util.Log.e(TAG, "local extraction failed", t)
@@ -283,9 +407,17 @@ class MainActivity : Activity() {
     }
 
     private fun speakTest() {
+        val engine = tts
+        if (engine == null || !engineReady) {
+            showResult(getString(R.string.engine_not_ready), announce = true)
+            return
+        }
         val input = findViewById<EditText>(R.id.inputText)
-        val text = input.text.toString().ifBlank { "SapiDroid speaking with Microsoft David." }
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "sapidroid-test")
+        val name = VoiceCatalog.infoFor(selectedVoice)?.name ?: "David"
+        val text = input.text.toString().ifBlank { "SapiDroid speaking with Microsoft $name." }
+        if (engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "sapidroid-test") == TextToSpeech.ERROR) {
+            showResult(getString(R.string.speak_refused), announce = true)
+        }
     }
 
     private fun tryAutospeak() {
@@ -293,12 +425,8 @@ class MainActivity : Activity() {
         val text = intent.getStringExtra(EXTRA_AUTOSPEAK) ?: return
         intent.getStringExtra(EXTRA_VOICE)?.let { name ->
             VoiceCatalog.infoFor(name)?.let { info ->
-                tts?.voice = android.speech.tts.Voice(
-                    info.label, info.locale,
-                    android.speech.tts.Voice.QUALITY_HIGH,
-                    android.speech.tts.Voice.LATENCY_NORMAL,
-                    false, emptySet()
-                )
+                selectedVoice = info.label
+                useVoice(info)
             }
         }
         findViewById<EditText>(R.id.inputText).setText(text)

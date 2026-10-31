@@ -2,4 +2,17 @@
 <resources>
     <string name="app_name">SapiDroid</string>
     <string name="engine_label">SapiDroid</string>
+
+    <string name="voice_label">Voice</string>
+    <string name="no_voices">No voice data installed yet</string>
+    <string name="voice_selected">Voice: %1$s</string>
+    <string name="voice_refused">%1$s could not be selected. Download its voice data, then choose it again.</string>
+
+    <string name="engine_not_ready">The engine is not ready yet. Wait a moment, then try speaking again.</string>
+    <string name="speak_refused">The engine would not start speaking. Check that the voice at the top of the screen has its data.</string>
+    <string name="speak_started">Speaking…</string>
+    <string name="speak_done">Done.</string>
+    <string name="speak_stopped">Stopped.</string>
+    <string name="speak_failed">The voice could not speak. Its data is missing or could not be read; download the voice, then try again.</string>
+    <string name="speak_error">Speaking failed (error %1$d).</string>
 </resources>

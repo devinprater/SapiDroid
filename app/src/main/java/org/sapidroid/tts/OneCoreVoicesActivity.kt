@@ -40,8 +40,12 @@ class OneCoreVoicesActivity : Activity() {
         refresh()
     }
 
-    private fun installed(pack: OneCorePacks.Pack): Boolean =
-        File(File(filesDir, "voice"), "M1033${pack.voice}.APM").exists()
+    /** Usable only with the voice's own files and the shared table beside them. */
+    private fun installed(pack: OneCorePacks.Pack): Boolean {
+        val dir = File(filesDir, "voice")
+        return File(dir, "M1033${pack.voice}.APM").isFile &&
+            File(dir, SappleVoices.SHARED_DATA).isFile
+    }
 
     private fun refresh() {
         rows.clear()
@@ -84,8 +88,9 @@ class OneCoreVoicesActivity : Activity() {
                         "every voice below.",
                     "The voice belongs to Microsoft, is not part of SapiDroid, and is for " +
                         "your own use.",
-                    "The bundle is unpacked into this app's private storage and is " +
-                        "deleted when the app closes."
+                    "The voice's files, and ${SappleVoices.SHARED_DATA}, the shared table " +
+                        "the engine reads with every voice, are unpacked into this app's " +
+                        "private storage. The bundle itself is deleted when the app closes."
                 ).joinToString(System.lineSeparator() + System.lineSeparator())
             )
             .setPositiveButton("Download") { _, _ -> download(pack) }

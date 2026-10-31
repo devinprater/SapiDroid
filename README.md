@@ -47,27 +47,36 @@ file winetricks fetches for its `speechsdk` verb). Unpack it, then unpack
 
 ### OneCore
 
-`files/voice`: `M1033David.APM`, `.BEP`, `.INI`, and for Zira and Mark
-`M1033Zira.*` / `M1033Mark.*` including `.SPEECHUX.NUS` and `.TBT.NUS`, plus the
+`files/voice`: `M1033<Voice>.{APM,BEP,INI}` for David, Zira and Mark, plus the
 shared `MSTTSLocEnUS.dat`, from
-`C:\Windows\Speech_OneCore\Engines\TTS\en-US` on Windows 8, 10 and 11.
+`C:\Windows\Speech_OneCore\Engines\TTS\en-US` on Windows 8, 10 and 11. Those are
+the three files per voice the engine loads; Windows keeps `.NUS` tables beside
+them, which it does not read.
 
-Mark is the Windows 10/11 voice; add his five files and he appears in the voice
-list. Any OneCore voice from another language pack works the same way, since the
-engine reads the voice files rather than knowing the voices.
+Mark is the Windows 10/11 voice; copy his three files and he appears in the voice
+list. The shared table is not optional: the engine opens it whichever voice it
+speaks with, so a voice without it cannot start. Any OneCore voice whose files
+are in this form is read the same way, since the engine reads the voice files
+rather than knowing the voices.
 
 ### OneCore voices in the app
 
 The app can fetch the English OneCore voices that are stored as plain files in
 [Sapple's](https://quintonwilliams.me/sapple/) iPhone build, which carries
 Microsoft's voice data for personal use. Choose **Download OneCore voices**:
-the screen lists each voice with its language, and the first pick downloads
-Sapple's 200 MB bundle. It stays in the cache while the app is open, so picking
-more voices costs nothing, and it is deleted when the app closes.
+the screen lists each voice with its language, starting with American English,
+and the first pick downloads Sapple's 200 MB bundle. It stays in the cache while
+the app is open, so picking more voices costs nothing, and it is deleted when
+the app closes.
 
-George, Susan and Hazel (British English) work on this engine. The bundle's
-newer voices (Sarah and Eva, and the Australian and Indian ones) use a model
-format the engine cannot load, and are not offered.
+Included are David, Zira and Mark (American English), George, Susan and Hazel
+(British English), James and Catherine (Australian English), and Richard and
+Linda (Indian English). Every pick also installs `MSTTSLocEnUS.dat`, the shared
+table the engine reads with every voice, so a downloaded voice works on its own
+and appears in the app's voice list at once.
+
+Three voices in the bundle are not offered because the engine cannot load their
+model format: Sarah and Eva, and Matilda.
 
 ### Anna
 
@@ -121,7 +130,8 @@ adb shell run-as org.sapidroid.tts mkdir -p files/sapi5
 adb shell "cat /sdcard/Download/Sam.spd | run-as org.sapidroid.tts sh -c 'cat > files/sapi5/Sam.spd'"
 ```
 
-Repeat for each file. The app's screen lists which voices it can see.
+Repeat for each file. The app's screen lists which voices it can see, and the
+voice picker offers them once their data is complete.
 
 ## How it is built
 
@@ -136,9 +146,121 @@ Repeat for each file. The app's screen lists which voices it can see.
   SAPI 5's -10..10 for SAPI 5 and OneCore, and the mode's pitch range and words
   per minute for SAPI 4.
 
-```
-gradle :app:assembleDebug
-```
+### Building the APK on Windows
+
+The build needs a JDK, the Android SDK, and the NDK and CMake versions
+`app/build.gradle.kts` pins.
+
+1. **JDK 17.** Android Gradle Plugin 8.5.2 is built and tested for JDK 17, not
+   newer ones. Install Eclipse Temurin 17:
+
+   ```powershell
+   winget install EclipseAdoptium.Temurin.17.JDK
+   ```
+
+   Then set `JAVA_HOME` in a new PowerShell window. The folder name includes
+   the patch version, so list what the installer created rather than copying a
+   version from an example:
+
+   ```powershell
+   $jdk = (Get-ChildItem 'C:\Program Files\Eclipse Adoptium' -Directory |
+           Where-Object Name -like 'jdk-17*' |
+           Sort-Object Name | Select-Object -Last 1).FullName
+   [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk, 'User')
+   $env:JAVA_HOME = $jdk
+   & "$env:JAVA_HOME\bin\java" -version
+   ```
+
+   The last line must print `17.x`. Until it does, every later step fails with
+   `ERROR: JAVA_HOME is set to an invalid directory: ...`, which means the
+   variable names a folder that does not exist. A per-user `JAVA_HOME`
+   overrides the machine-wide one, so fix the user variable if the machine one
+   is already correct. Windows only passes new environment variables to
+   programs started afterwards, so open a fresh window (or reopen Android
+   Studio) after setting them.
+
+   If the build stops with a bare version number such as `25.0.4` under "What
+   went wrong", Gradle found a newer JDK; `.\gradlew.bat -version` shows which
+   one it used under `Launcher JVM`.
+
+2. **Android SDK.** The simplest way is Android Studio:
+
+   ```powershell
+   winget install Google.AndroidStudio
+   ```
+
+   In **SDK Manager**, tick *Android SDK Platform 34*, *Android SDK Build-Tools
+   34.0.0*, *NDK (Side by side) 28.0.13004108* and *CMake 3.22.1*. Then point
+   Gradle at the SDK, in the same PowerShell window:
+
+   ```powershell
+   $sdk = "$env:LOCALAPPDATA\Android\Sdk"
+   [Environment]::SetEnvironmentVariable('ANDROID_HOME', $sdk, 'User')
+   $env:ANDROID_HOME = $sdk
+   Test-Path $env:ANDROID_HOME
+   ```
+
+   Do not run `setx ANDROID_HOME "$env:LOCALAPPDATA\Android\Sdk"` from cmd:
+   `$env:` is PowerShell syntax, and cmd stores that text literally, so Gradle
+   fails with `SDK location not found`. In cmd, write
+   `setx ANDROID_HOME "%LOCALAPPDATA%\Android\Sdk"` instead.
+
+   Android Studio writes the same path into `local.properties` itself. If you
+   would rather use that file than the variable, add
+   `sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk`.
+
+   Gradle downloads these SDK packages during the first build when the licences
+   are accepted, so ticking them by hand only saves time; without accepted
+   licences the build stops with "Failed to install the following Android SDK
+   packages".
+
+3. **Build.** From the folder holding this README:
+
+   ```powershell
+   .\gradlew.bat :app:assembleDebug
+   ```
+
+   The first run downloads Gradle 8.13, the pinned NDK and CMake if the SDK is
+   missing them, and the dependencies, so it takes several minutes. The APK is
+   written to `app\build\outputs\apk\debug\app-debug.apk`. Add
+   `--console=plain` for readable progress in a terminal.
+
+4. **Install.** `adb.exe` lives in the SDK's `platform-tools` folder, which the
+   SDK installer does not add to `PATH`. Add it once, in a new PowerShell
+   window:
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable(
+       'Path',
+       [Environment]::GetEnvironmentVariable('Path', 'User') +
+           ";$env:LOCALAPPDATA\Android\Sdk\platform-tools",
+       'User')
+   ```
+
+   Without that step, `adb install` fails with `'adb' is not recognized`. With
+   the phone connected and USB debugging on:
+
+   ```powershell
+   adb install -r app\build\outputs\apk\debug\app-debug.apk
+   ```
+
+   If it stops with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the copy on the phone
+   was signed with a different key (debug builds use a per-machine key). Run
+   `adb uninstall org.sapidroid.tts` first; that also deletes its downloaded
+   voices.
+
+   Open SapiDroid, download a voice, then choose SapiDroid as the engine under
+   **Settings → System → Languages & input → Text-to-speech**.
+
+   The picker on SapiDroid's own screen is the engine's default voice, and that
+   is what screen readers use: TalkBack and its forks, such as Backtalk, have no
+   voice list of their own. They set a language and take whatever voice the
+   engine names for it. A reader that is already running keeps the voice it
+   connected with, so restart Backtalk (or the phone) after changing the picker.
+   Android's Text-to-speech screen also links here, through the settings
+   shortcut beside SapiDroid's name.
+
+On Linux or macOS, run `./gradlew :app:assembleDebug` instead.
 
 ## Natural voices
 
